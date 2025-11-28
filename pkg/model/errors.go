@@ -1,0 +1,23 @@
+package model
+
+import (
+	"fmt"
+)
+
+// See 13.3 Error Codes
+
+type MOQT_SESSION_TERMINATION_ERROR_CODE int
+
+const (
+	MOQT_SESSION_TERMINATION_ERROR_CODE_PROTOCOL_VIOLATION         MOQT_SESSION_TERMINATION_ERROR_CODE = 0x3
+	MOQT_SESSION_TERMINATION_ERROR_CODE_KEY_VALUE_FORMATTING_ERROR MOQT_SESSION_TERMINATION_ERROR_CODE = 0x6
+)
+
+type MOQT_SESSION_TERMINATION_ERROR struct {
+	ErrorCode    MOQT_SESSION_TERMINATION_ERROR_CODE
+	ReasonPhrase MoqtReasonPhrase
+}
+
+func (e MOQT_SESSION_TERMINATION_ERROR) Error() string {
+	return fmt.Sprintf("MOQT Session Termination Error - Code: %#X, Reason: %s", e.ErrorCode, e.ReasonPhrase)
+}
