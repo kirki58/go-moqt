@@ -4,6 +4,13 @@ import "fmt"
 
 const maxMoqtKeyValuePairValueLength = 65535
 
+type MoqtKeyValuePairValueType int
+
+const (
+	MoqtKeyValuePairValueType_Bytes  MoqtKeyValuePairValueType = iota
+	MoqtKeyValuePairValueType_UInt64
+)
+
 // MoqtKeyValuePair represents the flexible Key-Value-Pair structure.
 // The interpretation of Length and Value depends on the Type.
 type MoqtKeyValuePair struct {
@@ -14,24 +21,27 @@ type MoqtKeyValuePair struct {
 	// Length (i): Only present on the wire if Type is odd.
 	// It specifies the length of the Value field in bytes.
 	// The maximum allowed length is 2^16 - 1 bytes (65535).
-	Length uint16
+
+	// KVPairType is NOT part of the wire format, but in go implementation it's useful to check for the type of the kvpair instead of checking evenness
+	KVPairType MoqtKeyValuePairValueType
 
 	// Value (..): The actual data.
 	// If Type is even, Value is a single varint (uint64).
 	// If Type is odd, Value is a sequence of Length bytes ([]byte).
 
 	// Value is either []byte or int64
-	Value any
+	ValueUInt64 uint64 // zero value = 0
+
+	ValueBytes []byte // zero value = nil 
 }
 
 func NewMoqtKeyValuePair(typeID uint64, value any) (MoqtKeyValuePair, error) {
-
 	switch t := value.(type) {
 	case []byte:
 		if typeID%2 == 0 {
 			return MoqtKeyValuePair{}, MOQT_SESSION_TERMINATION_ERROR{
 				ErrorCode:    MOQT_SESSION_TERMINATION_ERROR_CODE_KEY_VALUE_FORMATTING_ERROR,
-				ReasonPhrase: NewReasonPhrase("For even Type IDs, Value must be of type int64"),
+				ReasonPhrase: NewReasonPhrase("For even Type IDs, Value must be of type uint64"),
 			}
 		}
 
@@ -45,11 +55,11 @@ func NewMoqtKeyValuePair(typeID uint64, value any) (MoqtKeyValuePair, error) {
 
 		return MoqtKeyValuePair{
 			Type:   typeID,
-			Length: uint16(len),
-			Value:  t,
+			KVPairType: MoqtKeyValuePairValueType_Bytes,
+			ValueBytes:  t,
 		}, nil
 
-	case int64:
+	case uint64:
 		if typeID%2 == 1 {
 			return MoqtKeyValuePair{}, MOQT_SESSION_TERMINATION_ERROR{
 				ErrorCode: MOQT_SESSION_TERMINATION_ERROR_CODE_KEY_VALUE_FORMATTING_ERROR,
@@ -59,13 +69,14 @@ func NewMoqtKeyValuePair(typeID uint64, value any) (MoqtKeyValuePair, error) {
 
 		return MoqtKeyValuePair{
 			Type:  typeID,
-			Value: t,
+			KVPairType: MoqtKeyValuePairValueType_UInt64,
+			ValueUInt64: t,
 		}, nil
 
 	default:
 		return MoqtKeyValuePair{}, MOQT_SESSION_TERMINATION_ERROR{
 			ErrorCode: MOQT_SESSION_TERMINATION_ERROR_CODE_KEY_VALUE_FORMATTING_ERROR,
-			ReasonPhrase: NewReasonPhrase(fmt.Sprintf("Value must be of type []byte or int64, got %T", t)),
+			ReasonPhrase: NewReasonPhrase(fmt.Sprintf("Value must be of type []byte or uint64, got %T", t)),
 		}
 	}
 }

@@ -15,17 +15,17 @@ func TestNewMoqtKeyValuePair(t *testing.T) {
 		errCode   MOQT_SESSION_TERMINATION_ERROR_CODE
 	}{
 		{
-			name:      "Even TypeID with int64 value",
+			name:      "Even TypeID with uint64 value",
 			typeID:    0x02,
-			value:     int64(123),
-			expected:  MoqtKeyValuePair{Type: 0x02, Value: int64(123)},
+			value:     uint64(123),
+			expected:  MoqtKeyValuePair{Type: 0x02, KVPairType: MoqtKeyValuePairValueType_UInt64 ,ValueUInt64: uint64(123)},
 			expectErr: false,
 		},
 		{
 			name:      "Odd TypeID with []byte value",
 			typeID:    0x01,
 			value:     []byte("hello"),
-			expected:  MoqtKeyValuePair{Type: 0x01, Length: 5, Value: []byte("hello")},
+			expected:  MoqtKeyValuePair{Type: 0x01, KVPairType: MoqtKeyValuePairValueType_Bytes, ValueBytes: []byte("hello")},
 			expectErr: false,
 		},
 		{
@@ -36,9 +36,9 @@ func TestNewMoqtKeyValuePair(t *testing.T) {
 			errCode:   MOQT_SESSION_TERMINATION_ERROR_CODE_KEY_VALUE_FORMATTING_ERROR,
 		},
 		{
-			name:      "Odd TypeID with int64 value - error",
+			name:      "Odd TypeID with uint64 value - error",
 			typeID:    0x01,
-			value:     int64(456),
+			value:     uint64(456),
 			expectErr: true,
 			errCode:   MOQT_SESSION_TERMINATION_ERROR_CODE_KEY_VALUE_FORMATTING_ERROR,
 		},
