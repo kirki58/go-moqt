@@ -1,3 +1,5 @@
+github.com/LukaGiorgadze/gonull/v2 v2.1.0 h1:Q/VzyEYtRyW3R1GKagfdrBbZuTNDv2uibOCczA/VVS8=
+github.com/LukaGiorgadze/gonull/v2 v2.1.0/go.mod h1:EDdsrB3GGauPQ7EN34y61ZwtDajd+osK92Wn+97JlAk=
 github.com/quic-go/qpack v0.5.1 h1:giqksBPnT/HDtZ6VhtFKgoLOWmlyo9Ei6u9PqzIMbhI=
 github.com/quic-go/qpack v0.5.1/go.mod h1:+PC4XFrEskIVkcLzpEkbLqq1uCoxPhQuvK5rH1ZgaEg=
 github.com/quic-go/quic-go v0.56.0 h1:q/TW+OLismmXAehgFLczhCDTYB3bFmua4D9lsNBWxvY=
