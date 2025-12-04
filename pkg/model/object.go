@@ -3,11 +3,11 @@ package model
 type MoqtObject struct {
 	// I. Identification
 	Location      MoqtLocation
-	SubgroupID    uint64
+	SubgroupID    uint64 // When object forwarding preference is "Datagram" this section is omitted in wire encoding
 	FullTrackName MoqtFullTrackName
 
 	// II. Control & Status Fields
-	PublisherPriority          uint8 // 0-255
+	PublisherPriority          uint8 // 0-255 Since it's already 8 bits no need to encode it as varint
 	ObjectForwardingPreference MoqtObjectForwardingPreference
 	ObjectStatus               MoqtObjectStatus
 
