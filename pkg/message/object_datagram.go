@@ -7,6 +7,13 @@ import (
 	"github.com/LukaGiorgadze/gonull/v2"
 )
 
+/*
+	Important Note: As of writing this note, the type values 0x2C and 0x2D are obviosly wrongly written in Table 5. They are duplicates of 0x28 and 0x29 in their respectible order and yet have different
+	typeid values, they also do not follow the bitmask logic implemented in here so they are considered outliers.
+
+	ref: [IETF MOQT draft 15](https://www.ietf.org/archive/id/draft-ietf-moq-transport-15.html#name-object-extension-header)
+*/
+
 // Used when Forwarding Preference = Datagram. The entire object (header + payload) fits inside one QUIC Datagram frame.
 
 // Wire Format:
@@ -45,20 +52,19 @@ import (
 
 // Following is the definition:
 
-// Bit Value	Hex		Flag Meaning			Effect on Datagram Structure
-// Bit 0		0x01	Extensions Present		If set, the Extensions field is added.
-// Bit 1		0x02	End of Group			If set, this object is the last in the group. (Only valid for Payload objects)
-// Bit 2		0x04	Object ID Omitted		If set, the Object ID field is removed (implied to be 0).
-// Bit 3		0x08	Priority Present		If set, the Publisher Priority field is added.
-// Bit 4		0x10	(Reserved)				Not used in Datagrams (used for Streams).
-// Bit 5		0x20	Status Present			If set, the Object Payload is replaced by Object Status.
+// Bit Mask		Hex		Logic Type		0 (Unset)			1 (Set)
+// Bit 0		0x01	Normal			No Extensions		Extensions Present
+// Bit 1		0x02	Normal			Not End of Group	End of Group
+// Bit 2		0x04	Inverted		Object ID Present	Object ID Omitted (0)
+// Bit 3		0x08	Inverted		Priority Present	Priority Omitted
+// Bit 5		0x20	Toggle			Payload				Status
 
 // Define the bitmasks based on MOQT Draft-15 Table 5
 const (
 	flagExtensionsPresent = 0x01 // Bit 0: 0000 0001
 	flagEndOfGroup        = 0x02 // Bit 1: 0000 0010
 	flagObjectIdOmitted   = 0x04 // Bit 2: 0000 0100
-	flagPriorityPresent   = 0x08 // Bit 3: 0000 1000
+	flagPriorityOmitted   = 0x08 // Bit 3: 0000 1000
 	flagStatusPresent     = 0x20 // Bit 5: 0010 0000
 )
 
@@ -72,14 +78,13 @@ type ObjectDatagramType struct {
 }
 
 // Here we apply the bitmask
-// Note that this function is not actually very much useful, But it demonstrates a good understanding for the relationship between type as a uint64 and type as a go struct
-// While creating ObjectDatagram types, we dynamically determine the type id that is going to be encoded to the wire, but still it doesnt hurt to have this function here
+// This function comes in handy when deserializing objects from the wire
 func NewObjectDatagramType(typeId uint64) (*ObjectDatagramType, error) {
 	// Verify that the typeId doesn't use bits that aren't defined for Datagrams
-	// (like the reserved 0x10 bit or anything > 0x3F).
+	// (like the reserved 0x10 bit or anything > 0x29).
 	// Note: While the spec defines specific IDs in Table 5, parsing bitwise is robust.
 	// Note: Bit 4 is reserved for Streams and must be 0 for Datagrams.
-	if typeId > 0x3F || (typeId&0x10) != 0 {
+	if typeId > 0x29 || (typeId&0x10) != 0 {
 		return &ObjectDatagramType{}, fmt.Errorf("invalid datagram type ID: 0x%x", typeId)
 	}
 
@@ -88,12 +93,12 @@ func NewObjectDatagramType(typeId uint64) (*ObjectDatagramType, error) {
 		ExtensionsPresent: (typeId & flagExtensionsPresent) != 0,
 		EndOfGroup:        (typeId & flagEndOfGroup) != 0, // Bit 1: EndOfGroup
 
-		// Bit 2: Logic Inversion!
+		// Bit 2 and 3: Logic Inversion!
 		// Flag Set (1) == Omitted == Present(False)
 		// Flag Unset (0) == Not Omitted == Present(True)
 		ObjectIdPresent: (typeId & flagObjectIdOmitted) == 0,
+		PriorityPresent: (typeId & flagPriorityOmitted) == 0,
 
-		PriorityPresent: (typeId & flagPriorityPresent) != 0,
 		StatusOrPayload: (typeId & flagStatusPresent) != 0,
 	}
 
@@ -105,7 +110,7 @@ func NewObjectDatagramType(typeId uint64) (*ObjectDatagramType, error) {
 
 	// Note:
 	// 		The only "invalid" values that pass the first validity check are the ones like
-	//  	0x22 or 0x2E (where Status and EndOfGroup are both set). However, the second check (if dt.StatusOrPayload && dt.EndOfGroup) correctly catches those specific cases.
+	//  	0x22 or 0x26 (where Status and EndOfGroup are both set). However, the second check (if dt.StatusOrPayload && dt.EndOfGroup) correctly catches those specific cases.
 
 	return &dt, nil
 }
@@ -132,8 +137,8 @@ func (dt *ObjectDatagramType) ToUInt64() uint64 {
 		typeId |= 0x04
 	}
 
-	// Bit 3: Priority Present
-	if dt.PriorityPresent {
+	// Bit 3: Priority Omitted
+	if !dt.PriorityPresent {
 		typeId |= 0x08
 	}
 
