@@ -165,7 +165,7 @@ func TestNewMoqtObject(t *testing.T) {
 				if err != nil {
 					t.Errorf("Did not expect an error but got: %v", err)
 				}
-				if !reflect.DeepEqual(obj, tt.expectedObject) {
+				if !reflect.DeepEqual(*obj, *(tt.expectedObject)) {
 					t.Errorf("Expected object %+v, got %+v", tt.expectedObject, obj)
 				}
 			}

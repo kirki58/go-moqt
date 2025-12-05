@@ -115,6 +115,7 @@ func NewObjectDatagramType(typeId uint64) (*ObjectDatagramType, error) {
 	return &dt, nil
 }
 
+// This function assumes that the given dt is valid, created with it's respectible "New..." function
 func (dt *ObjectDatagramType) ToUInt64() uint64 {
 	var typeId uint64 = 0
 
@@ -152,6 +153,7 @@ func (dt *ObjectDatagramType) ToUInt64() uint64 {
 }
 
 // Although we avoid creating any invalid datagram type values, this function creates a sense of safety for freeuse of the function ToUInt64()
+// Also it's handy to check the validity of incoming datagram types.
 func (dt *ObjectDatagramType) IsValid() bool{
 	// Verify that the typeId doesn't use bits that aren't defined for Datagrams
 	if dt.StatusOrPayload && dt.EndOfGroup {
@@ -160,7 +162,7 @@ func (dt *ObjectDatagramType) IsValid() bool{
 		return false
 	}
 	// Check range and reserved value
-	if dt.TypeID > 0x3F || (dt.TypeID&0x10) != 0 {
+	if dt.TypeID > 0x29 || (dt.TypeID&0x10) != 0 {
 		return false
 	}
 	return true
@@ -223,7 +225,7 @@ func WithPayload(payload []byte) ObjectDatagramOption {
 }
 
 // Rule 1 --> Either WithPayload or WithStatus options are present, they cant be present at once (they are mutually exclusive)
-// Rule 2 --> WithExtensions and WithEndOfGroup options are mutually exclusive and they can be both non-existent
+// Rule 2 --> WithStatus and WithEndOfGroup options are mutually exclusive and they can be both non-existent
 
 func NewObjectDatagram(trackAlias uint64, groupId uint64, opts ...ObjectDatagramOption) (*ObjectDatagram, error){
 	// Define default configuration
@@ -245,17 +247,17 @@ func NewObjectDatagram(trackAlias uint64, groupId uint64, opts ...ObjectDatagram
 	}
 
 	// Validate Rule 2
-	if dg.Dtype.ExtensionsPresent && dg.Dtype.EndOfGroup {
-		return nil, fmt.Errorf("extensions cannot be present when status is present")
+	if dg.Dtype.StatusOrPayload && dg.Dtype.EndOfGroup {
+		return nil, fmt.Errorf("EndOfGroup cannot be present when status is present")
 	}
 
 	// Determine the TypeId
 	typeId := dg.Dtype.ToUInt64()
 	dg.Dtype.TypeID = typeId
 	
-	// if !dg.Dtype.IsValid() { // It's certain that typeId is valid now, no need for an extra validity check
-	// 	return nil, fmt.Errorf("invalid object datagram type constructed: 0x%x", dg.Dtype.TypeID)
-	// }
+	if !dg.Dtype.IsValid() { // In certain cases, an object with invalid type can be produced.
+		return nil, fmt.Errorf("invalid object datagram type constructed: 0x%x", dg.Dtype.TypeID)
+	}
 
 	return dg, nil
 }
