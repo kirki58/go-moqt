@@ -61,6 +61,17 @@ func EncodeExtensions(b *[]byte, kvPairs []model.MoqtKeyValuePair){
 	}
 }
 
+// OBJECT_DATAGRAM {
+//   Type (i) = 0x00-0x1F,0x20-21,0x24-25,0x28-29,0x2C-2D
+//   Track Alias (i),
+//   Group ID (i),
+//   [Object ID (i),]
+//   [Publisher Priority (8),]
+//   [Extensions (..),]
+//   [Object Status (i),]
+//   [Object Payload (..),]
+// }
+
 func EncodeObjectDatagram(b *[]byte, dg *ObjectDatagram){
 	*b = quicvarint.Append(*b, dg.Dtype.TypeID)
 	*b = quicvarint.Append(*b, dg.TrackAlias)
@@ -78,8 +89,3 @@ func EncodeObjectDatagram(b *[]byte, dg *ObjectDatagram){
 		*b = append(*b, dg.Payload.Val...)
 	}
 }
-
-// Reason Phrase {
-//   Reason Phrase Length (i),
-//   Reason Phrase Value (..)
-// }
