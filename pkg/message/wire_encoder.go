@@ -47,6 +47,38 @@ func EncodeMoqtKeyValuePair(b *[]byte, kvPair model.MoqtKeyValuePair){
 	}
 }
 
+func EncodeExtensions(b *[]byte, kvPairs []model.MoqtKeyValuePair){
+	// Object Extension Headers are serialized as Key-Value-Pairs (see Figure 2), prefixed by the length of the serialized Key-Value-Pairs, in bytes
+
+	// 	Extensions {
+	//   Extension Headers Length (i),
+	//   Extension headers (..),
+	//}
+
+	*b = quicvarint.Append(*b, uint64(len(kvPairs)))
+	for _, kv := range kvPairs {
+		EncodeMoqtKeyValuePair(b, kv)
+	}
+}
+
+func EncodeObjectDatagram(b *[]byte, dg *ObjectDatagram){
+	*b = quicvarint.Append(*b, dg.Dtype.TypeID)
+	*b = quicvarint.Append(*b, dg.TrackAlias)
+	EncodeMoqtLocation(b, dg.Location) // Note that if object id is ommited than it defaults to 0
+
+	if dg.PublisherPriority.Valid {
+		*b = quicvarint.Append(*b ,uint64(dg.PublisherPriority.Val))
+	}
+	if dg.Extensions.Valid {
+		EncodeExtensions(b, dg.Extensions.Val)
+	}
+	if dg.Status.Valid {
+		*b = quicvarint.Append(*b, uint64(dg.Status.Val))
+	} else if dg.Payload.Valid {
+		*b = append(*b, dg.Payload.Val...)
+	}
+}
+
 // Reason Phrase {
 //   Reason Phrase Length (i),
 //   Reason Phrase Value (..)
