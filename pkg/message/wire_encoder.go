@@ -78,7 +78,7 @@ func EncodeObjectDatagram(b *[]byte, dg *ObjectDatagram){
 	EncodeMoqtLocation(b, dg.Location) // Note that if object id is ommited than it defaults to 0
 
 	if dg.PublisherPriority.Valid {
-		*b = quicvarint.Append(*b ,uint64(dg.PublisherPriority.Val))
+		*b = append(*b, dg.PublisherPriority.Val) // Publisher Priority is a single byte, So no need to use quicvarint we manually append it to the byte slice.
 	}
 	if dg.Extensions.Valid {
 		EncodeExtensions(b, dg.Extensions.Val)

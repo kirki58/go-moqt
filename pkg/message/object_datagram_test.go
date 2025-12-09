@@ -132,6 +132,15 @@ func TestNewObjectDatagramType(t *testing.T) {
 			},
 			expectErr: false,
 		},
+		{
+			name: "0x2D --> Extensions present, With status",
+			typeID: 0x2D,
+			expected: &ObjectDatagramType{
+				TypeID: 0x2D,
+				ExtensionsPresent: true,
+				StatusOrPayload: true,
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -226,6 +235,14 @@ func TestToUInt64(t *testing.T) {
 				StatusOrPayload:   true,
 			},
 			expected: 0x29,
+		},
+		{
+			name: "0x2D --> Extensions Present with Status",
+			dt: ObjectDatagramType{
+				ExtensionsPresent: true,
+				StatusOrPayload: true,
+			},
+			expected: 0x2D,
 		},
 	}
 

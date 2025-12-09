@@ -84,7 +84,7 @@ func NewObjectDatagramType(typeId uint64) (*ObjectDatagramType, error) {
 	// (like the reserved 0x10 bit or anything > 0x29).
 	// Note: While the spec defines specific IDs in Table 5, parsing bitwise is robust.
 	// Note: Bit 4 is reserved for Streams and must be 0 for Datagrams.
-	if typeId > 0x29 || (typeId&0x10) != 0 {
+	if typeId > 0x2D || (typeId&0x10) != 0 {
 		return &ObjectDatagramType{}, fmt.Errorf("invalid datagram type ID: 0x%x", typeId)
 	}
 
@@ -162,7 +162,7 @@ func (dt *ObjectDatagramType) IsValid() bool{
 		return false
 	}
 	// Check range and reserved value
-	if dt.TypeID > 0x29 || (dt.TypeID&0x10) != 0 {
+	if dt.TypeID > 0x2D || (dt.TypeID&0x10) != 0 {
 		return false
 	}
 	return true
