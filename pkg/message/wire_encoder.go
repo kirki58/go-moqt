@@ -89,3 +89,32 @@ func EncodeObjectDatagram(b *[]byte, dg *ObjectDatagram){
 		*b = append(*b, dg.Payload.Val...)
 	}
 }
+
+// OBJECT_DATAGRAM {
+//   Type (i) = 0x00-0x1F,0x20-21,0x24-25,0x28-29,0x2C-2D
+//   Track Alias (i),
+//   Group ID (i),
+//   [Object ID (i),]
+//   [Publisher Priority (8),]
+//   [Extensions (..),]
+//   [Object Status (i),]
+// }
+// In this function we do not encode the payload into the slice
+// In video streams payloads can be big, and Instead of loading them into the memory we might want to directly write them to the network transport stream.
+// After encoding of "only" the header, than writing it to the stream, we can write "payload" to the stream separetly in session implementation
+// The testing for this function is not necessary as long as the common parts of the code are not changed
+func EncodeObjectDatagramHeader(b *[]byte, dg *ObjectDatagram){
+	*b = quicvarint.Append(*b, dg.Dtype.TypeID)
+	*b = quicvarint.Append(*b, dg.TrackAlias)
+	EncodeMoqtLocation(b, dg.Location) // Note that if object id is ommited than it defaults to 0
+
+	if dg.PublisherPriority.Valid {
+		*b = append(*b, dg.PublisherPriority.Val) // Publisher Priority is a single byte, So no need to use quicvarint we manually append it to the byte slice.
+	}
+	if dg.Extensions.Valid {
+		EncodeExtensions(b, dg.Extensions.Val)
+	}
+	if dg.Status.Valid {
+		*b = quicvarint.Append(*b, uint64(dg.Status.Val))
+	}
+}
