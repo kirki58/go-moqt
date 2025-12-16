@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"go-moq/pkg/model"
 
+	"github.com/LukaGiorgadze/gonull/v2"
 	"github.com/quic-go/quic-go/quicvarint"
 )
 
@@ -122,4 +123,100 @@ func DecodeExtensions(b []byte) ([]model.MoqtKeyValuePair, int, error) {
 	}
 	return kvPairs, parsed, nil
 
+}
+
+func DecodeObjectDatagram(b []byte) (*ObjectDatagram, int, error){
+	parsed := 0
+	typId, n, err := quicvarint.Parse(b)
+	parsed += n
+
+	if err != nil {
+		return nil, parsed, fmt.Errorf("DecodeObjectDatagram: failed to parse Type ID: %w", err)
+	}
+	b = b[n:]
+
+	// Create ObjectDatagramType from the parsed TypeID
+	dtype, err := NewObjectDatagramType(typId)
+	if err != nil {
+		return nil, parsed, fmt.Errorf("DecodeObjectDatagram: invalid Type ID %d: %w", typId, err)
+	}
+
+	// Decode Track Alias
+	trackAlias, n, err := quicvarint.Parse(b)
+	parsed += n
+	if err != nil {
+		return nil, parsed, fmt.Errorf("DecodeObjectDatagram: failed to parse Track Alias: %w", err)
+	}
+	b = b[n:]
+
+	// Decode Location
+	location, n, err := DecodeMoqtLocation(b)
+	parsed += n
+	if err != nil {
+		return nil, parsed, fmt.Errorf("DecodeObjectDatagram: failed to parse Location: %w", err)
+	}
+	b = b[n:]
+
+	// Decode Publisher Priority if present
+	var publisherPriority uint8
+	if dtype.PriorityPresent {
+		if len(b) < 1 {
+			return nil, parsed, fmt.Errorf("DecodeObjectDatagram: insufficient bytes for Publisher Priority")
+		}
+		publisherPriority = b[0]
+		parsed += 1
+		b = b[1:]
+	}
+
+	// Decode Extensions if present
+	var extensions []model.MoqtKeyValuePair
+	if dtype.ExtensionsPresent {
+		ext, n, err := DecodeExtensions(b)
+		parsed += n
+		if err != nil {
+			return nil, parsed, fmt.Errorf("DecodeObjectDatagram: failed to parse Extensions: %w", err)
+		}
+		extensions = ext
+		b = b[n:]
+	}
+
+	// Decode Status or Payload
+	var status model.MoqtObjectStatus
+	var payload []byte
+	if dtype.StatusOrPayload {
+		s, n, err := quicvarint.Parse(b)
+		parsed += n
+		if err != nil {
+			return nil, parsed, fmt.Errorf("DecodeObjectDatagram: failed to parse Object Status: %w", err)
+		}
+		status = model.MoqtObjectStatus(s)
+		b = b[n:]
+	} else {
+		// The rest of the buffer is the payload
+		payload = make([]byte, len(b))
+		copy(payload, b)
+		parsed += len(b)
+		b = b[len(b):] // Consume all remaining bytes
+	}
+
+	// Construct the ObjectDatagram
+	dg := &ObjectDatagram{
+		Dtype:      *dtype,
+		TrackAlias: trackAlias,
+		Location:   location,
+	}
+
+	if dtype.PriorityPresent {
+		dg.PublisherPriority = gonull.NewNullable(publisherPriority)
+	}
+	if dtype.ExtensionsPresent {
+		dg.Extensions = gonull.NewNullable(extensions)
+	}
+	if dtype.StatusOrPayload {
+		dg.Status = gonull.NewNullable(status)
+	} else {
+		dg.Payload = gonull.NewNullable(payload)
+	}
+
+	return dg, parsed, nil	
 }

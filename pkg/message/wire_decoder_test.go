@@ -303,3 +303,120 @@ func TestDecodeExtensions(t *testing.T){
 		})
 	}
 }
+
+func TestDecodeObjectDatagram(t *testing.T){
+	tests := []struct {
+		name string
+		buf []byte
+		expectedDG *ObjectDatagram
+		expectedN int
+		expectErr bool
+	}{
+		{
+			name: "0x03 ObjectDatagram",
+			buf: []byte{
+				0x03, // TypeId of the datagram
+				0x01, // Track Alias
+
+				// Location - Start
+				0x02, // GroupId
+				0x0C, // ObjectId
+				// Location - End
+
+				0x0C, // Publisher Priority
+
+				// Extensions - Start
+				0x02, // Length of extensions
+				// Extension 1
+				0x0A, 0x0B,
+				// Extensions 2
+				0x15, 0x02, 0x00, 0x01, // Type = 21, Len = 2, Value = [0, 1]
+				// Extensions - End
+
+				// Status field omitted entirely because of datagram's type (0x03)
+
+				// Dump the rest with the paylaod as is
+				0x21, 0x22, 0x22, 0xFF,
+			},
+			expectedDG: internal.Must(NewObjectDatagram(1, 2,
+				WithObjectId(12),
+				WithPublisherPriority(12),
+				WithExtensions(
+					[]model.MoqtKeyValuePair{
+						internal.Must(model.NewMoqtKeyValuePair(10, uint64(11))),
+						internal.Must(model.NewMoqtKeyValuePair(21, []byte{0x00, 0x01})),
+					},
+				),
+				WithEndOfGroup(),
+				WithPayload(
+					[]byte{
+						0x21, 0x22, 0x22, 0xFF,
+					},
+				),
+			)),
+			expectedN: 16,
+			expectErr: false,
+		},
+		{
+			name: "0x21 ObjectDatagram (Status, Extensions, Priority, ObjectId)",
+			buf: []byte{
+				0x21, // TypeId
+				0x01, // Track Alias
+
+				// Location - Start
+				0x02, // GroupId
+				0x0C, // ObjectId
+				// Location - End
+
+				0x0C, // Publisher Priority
+
+				// Extensions - Start
+				0x02, // Length of extensions
+				// Extension 1
+				0x0A, 0x0B,
+				// Extensions 2
+				0x15, 0x02, 0x00, 0x01, // Type = 21, Len = 2, Value = [0, 1]
+				// Extensions - End
+
+				0x03, // Status, EndOfGroup = 0x03
+
+				// Payload field ommited entirely in status object
+			},
+			expectedDG: internal.Must(NewObjectDatagram(1, 2,
+				WithObjectId(12),
+				WithPublisherPriority(12),
+				WithExtensions(
+					[]model.MoqtKeyValuePair{
+						internal.Must(model.NewMoqtKeyValuePair(10, uint64(11))),
+						internal.Must(model.NewMoqtKeyValuePair(21, []byte{0x00, 0x01})),
+					},
+				),
+				WithStatus(model.EndOfGroup),
+			)),
+			expectedN: 13,
+		},
+
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dg, n, err := DecodeObjectDatagram(tt.buf)
+			
+			if tt.expectErr {
+				if err == nil {
+					t.Errorf("DecodeObjectDatagram() expected an error, but got none")
+				}
+			} else {
+				if err != nil {
+					t.Errorf("DecodeObjectDatagram() unexpected error: %v", err)
+				}
+				if !reflect.DeepEqual(dg, tt.expectedDG) {
+					t.Errorf("DecodeObjectDatagram() got datagram = %v, want %v", *dg, *(tt.expectedDG))
+				}
+				if n != tt.expectedN {
+					t.Errorf("DecodeObjectDatagram() got parsed bytes = %v, want %v", n, tt.expectedN)
+				}
+			}
+		})
+	}
+}
