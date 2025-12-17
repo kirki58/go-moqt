@@ -157,6 +157,13 @@ func DecodeObjectDatagram(b []byte) (*ObjectDatagram, int, error){
 	}
 	b = b[n:]
 
+	// Construct the ObjectDatagram
+	dg := &ObjectDatagram{
+		Dtype:      *dtype,
+		TrackAlias: trackAlias,
+		Location:   location,
+	}
+
 	// Decode Publisher Priority if present
 	var publisherPriority uint8
 	if dtype.PriorityPresent {
@@ -166,6 +173,8 @@ func DecodeObjectDatagram(b []byte) (*ObjectDatagram, int, error){
 		publisherPriority = b[0]
 		parsed += 1
 		b = b[1:]
+
+		dg.PublisherPriority = gonull.NewNullable(publisherPriority)
 	}
 
 	// Decode Extensions if present
@@ -178,6 +187,8 @@ func DecodeObjectDatagram(b []byte) (*ObjectDatagram, int, error){
 		}
 		extensions = ext
 		b = b[n:]
+		
+		dg.Extensions = gonull.NewNullable(extensions)
 	}
 
 	// Decode Status or Payload
@@ -191,30 +202,15 @@ func DecodeObjectDatagram(b []byte) (*ObjectDatagram, int, error){
 		}
 		status = model.MoqtObjectStatus(s)
 		b = b[n:]
+
+		dg.Status = gonull.NewNullable(status)
 	} else {
 		// The rest of the buffer is the payload
 		payload = make([]byte, len(b))
 		copy(payload, b)
 		parsed += len(b)
 		b = b[len(b):] // Consume all remaining bytes
-	}
 
-	// Construct the ObjectDatagram
-	dg := &ObjectDatagram{
-		Dtype:      *dtype,
-		TrackAlias: trackAlias,
-		Location:   location,
-	}
-
-	if dtype.PriorityPresent {
-		dg.PublisherPriority = gonull.NewNullable(publisherPriority)
-	}
-	if dtype.ExtensionsPresent {
-		dg.Extensions = gonull.NewNullable(extensions)
-	}
-	if dtype.StatusOrPayload {
-		dg.Status = gonull.NewNullable(status)
-	} else {
 		dg.Payload = gonull.NewNullable(payload)
 	}
 
