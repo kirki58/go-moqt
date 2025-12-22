@@ -13,16 +13,17 @@ import (
 	"github.com/quic-go/quic-go"
 )
 
-var transportDialTimeout int = 30 // time (seconds) limit to get a response to quic or WT dial.
+const transportDialTimeout = 30 // time (seconds) limit to get a response to quic or WT dial.
+const maxUniStreams = 100 // Maximum number of concurrent unidirectional streams (incoming, because it's usually the server opening uni streams)
 
 // MOQT Client functionality
 
-type Client struct{
+type Client struct {
 	// Active sessions
 	sessions map[string]*session.Session // string represents the connection URI
 }
 
-func (c *Client) Connect(uri string) (transport.MOQTConnection, error){
+func (c *Client) Connect(uri string) (transport.MOQTConnection, error) {
 	u, err := url.Parse(uri)
 	if err != nil {
 		return nil, fmt.Errorf("Client.Connect(): Failed to parse URI: %w", err)
@@ -31,7 +32,7 @@ func (c *Client) Connect(uri string) (transport.MOQTConnection, error){
 	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(transportDialTimeout)*time.Second)
 	defer cancel()
 
-	switch u.Scheme{
+	switch u.Scheme {
 	case "moqt": // QUIC Connection
 		// Configure TLS with the correct ALPN (moqt-15) [Cite: Section 3.1]
 		tlsConf := &tls.Config{
@@ -39,25 +40,27 @@ func (c *Client) Connect(uri string) (transport.MOQTConnection, error){
 		}
 
 		quicConf := &quic.Config{
-			EnableDatagrams: true, // The QUIC Datagram extension MUST be supported. [Cite: Section 3.1]
+			EnableDatagrams:       true, // The QUIC Datagram extension MUST be supported. [Cite: Section 3.1]
+			MaxIncomingStreams:    1,    // Only 1 bidirectional stream allowed that is the control stream.
+			MaxIncomingUniStreams: maxUniStreams,  // Temporary hard limit.
 		}
 
 		// 2. Dial the QUIC Connection
-        // If port is missing, default to 443 [cite: Section 3.1.2]
-        addr := u.Host
-        if u.Port() == "" {
-            addr = u.Host + ":443"
-        }
+		// If port is missing, default to 443 [cite: Section 3.1.2]
+		addr := u.Host
+		if u.Port() == "" {
+			addr = u.Host + ":443"
+		}
 
 		qConn, err := quic.DialAddr(ctx, addr, tlsConf, quicConf)
-		if err != nil{
+		if err != nil {
 			return nil, fmt.Errorf("Client.Connect(): Failed to dial QUIC connection: %w", err)
 		}
 		return &moqtquic.Connection{Conn: qConn}, nil
 
 	case "https": // WebTransport Connection
-	// TODO: Implement webtransport connection
-	// The client performs an HTTP/3 CONNECT request. It MUST include the header WT-Available-Protocols: moqt-15
+		// TODO: Implement webtransport connection
+		// The client performs an HTTP/3 CONNECT request. It MUST include the header WT-Available-Protocols: moqt-15
 		return nil, nil
 
 	default:
