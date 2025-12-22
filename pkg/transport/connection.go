@@ -34,4 +34,5 @@ type MOQTConnection interface {
 	OpenUniStreamSync(context.Context) (SendStream, error) // The endpoint that opens a unidirectional stream is the one that writes to it. So this function must open a SendStream
 	AcceptStream(context.Context) (Stream, error)
 	AcceptUniStream(context.Context) (ReceiveStream, error) // Receiver accepts unistream (ReceiveStream)
+	IsWebTransport() bool // Returns true if the underlying transport is WebTransport false if QUIC
 }

@@ -72,22 +72,38 @@ type SessionState struct {
 	NegotiatedExtensions map[uint64]bool
 }
 
-type Session struct {
-	Conn          *transport.MOQTConnection
-	controlStream *transport.Stream
+func FromParams(params []model.MoqtKeyValuePair) *SessionState{
+	sstate := SessionState{} // Initialize with default values, TODO: change this later
 
-	cmf *control.ControlMessageFactory // This is so that the session is able to read and write control messages
+	for _, param := range params {
+		switch param.Type {
+		case control.SetupParamPath:
+			sstate.Path = string(param.ValueBytes)
+		case control.SetupParamAuthority:
+			sstate.Authority = string(param.ValueBytes)
+		case control.SetupParamMaxRequestID:
+			sstate.MaxIncomingRequestID = param.ValueUInt64
+		case control.SetupParamMaxAuthTokenCacheSize:
+			sstate.LocalTokenCacheSize = param.ValueUInt64
+		case control.SetupParamMoqtImplementation:
+			sstate.PeerImplementation = string(param.ValueBytes)
+		default:
+			continue // Unknown parameter, ignore.
+		}
+	}
+
+	return &sstate
+}
+
+type Session struct {
+	Conn          transport.MOQTConnection
+	ControlStream transport.Stream
+
+	Cmf *control.ControlMessageFactory // This is so that the session is able to read and write control messages
 
 	State *SessionState
 
 	trackAliases map[uint64]model.MoqtFullTrackName
-}
-
-func NewSession(conn *transport.MOQTConnection, state *SessionState) *Session {
-	return &Session{
-		Conn:  conn,
-		State: state,
-	}
 }
 
 // // Handshake performs the MOQT handshake.
