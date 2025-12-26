@@ -120,7 +120,7 @@ func (cmf *ControlMessageFactory) ReadControlMessage() (ControlMessage, error) {
 
 	case uint64(SERVER_SETUP):
 		msg = &ServerSetupMessage{}
-	
+
 	// TODO: More control messages as we go
 	default:
 		return nil, model.MOQT_SESSION_TERMINATION_ERROR{
@@ -150,39 +150,39 @@ func (cmf *ControlMessageFactory) ReadControlMessage() (ControlMessage, error) {
 // WriteControlMessage encodes and writes a message.
 // It is safe for concurrent use.
 func (cmf *ControlMessageFactory) WriteControlMessage(msg ControlMessage) error {
-    cmf.writeLock.Lock()
-    defer cmf.writeLock.Unlock()
+	cmf.writeLock.Lock()
+	defer cmf.writeLock.Unlock()
 
-    // 1. Encode Payload
-    payload, err := msg.Encode()
-    if err != nil {
-        return fmt.Errorf("encode failed: %w", err)
-    }
+	// 1. Encode Payload
+	payload, err := msg.Encode()
+	if err != nil {
+		return fmt.Errorf("encode failed: %w", err)
+	}
 
-    // 2. Write Header (Type + Length) directly to buffer
-    // Note: quicvarint.Append is great, but we can also use quicvarint.Write 
-    // if we want to write directly to our bufio.Writer piece by piece.
-    
-    // We use a small intermediate buffer for varints to ensure we don't fail halfway through writing a header
-    header := make([]byte, 0, 16)
-    header = quicvarint.Append(header, uint64(msg.Type()))
-    header = quicvarint.Append(header, uint64(len(payload)))
+	// 2. Write Header (Type + Length) directly to buffer
+	// Note: quicvarint.Append is great, but we can also use quicvarint.Write
+	// if we want to write directly to our bufio.Writer piece by piece.
 
-    if _, err := cmf.w.Write(header); err != nil {
-        return fmt.Errorf("write header failed: %w", err)
-    }
+	// We use a small intermediate buffer for varints to ensure we don't fail halfway through writing a header
+	header := make([]byte, 0, 16)
+	header = quicvarint.Append(header, uint64(msg.Type()))
+	header = quicvarint.Append(header, uint64(len(payload)))
 
-    // 3. Write Payload
-    if len(payload) > 0 {
-        if _, err := cmf.w.Write(payload); err != nil {
-            return fmt.Errorf("write payload failed: %w", err)
-        }
-    }
+	if _, err := cmf.w.Write(header); err != nil {
+		return fmt.Errorf("write header failed: %w", err)
+	}
 
-    // 4. FLUSH is mandatory when using bufio.Writer
-    if err := cmf.w.Flush(); err != nil {
-        return fmt.Errorf("flush failed: %w", err)
-    }
+	// 3. Write Payload
+	if len(payload) > 0 {
+		if _, err := cmf.w.Write(payload); err != nil {
+			return fmt.Errorf("write payload failed: %w", err)
+		}
+	}
 
-    return nil
+	// 4. FLUSH is mandatory when using bufio.Writer
+	if err := cmf.w.Flush(); err != nil {
+		return fmt.Errorf("flush failed: %w", err)
+	}
+
+	return nil
 }

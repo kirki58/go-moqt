@@ -83,3 +83,15 @@ func (c *Connection) AcceptUniStream(ctx context.Context) (transport.ReceiveStre
 func (c *Connection) IsWebTransport() bool {
 	return false
 }
+
+func (c *Connection) CloseWithError(code uint64, reason string) error {
+	return c.Conn.CloseWithError(quic.ApplicationErrorCode(code), reason)
+}
+
+func (c *Connection) Context() context.Context {
+	return c.Conn.Context()
+}
+
+func (c *Connection) RemoteHost() string {
+	return c.Conn.RemoteAddr().String()
+}

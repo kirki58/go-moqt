@@ -35,4 +35,7 @@ type MOQTConnection interface {
 	AcceptStream(context.Context) (Stream, error)
 	AcceptUniStream(context.Context) (ReceiveStream, error) // Receiver accepts unistream (ReceiveStream)
 	IsWebTransport() bool // Returns true if the underlying transport is WebTransport false if QUIC
+	CloseWithError(uint64 , string) error // Terminates the session with the given error information
+	Context() context.Context // Returns a context that lives throughout the connection (until it's closed)
+	RemoteHost() string // Returns the remote host address
 }
