@@ -85,7 +85,10 @@ func NewObjectDatagramType(typeId uint64) (*ObjectDatagramType, error) {
 	// Note: While the spec defines specific IDs in Table 5, parsing bitwise is robust.
 	// Note: Bit 4 is reserved for Streams and must be 0 for Datagrams.
 	if typeId > 0x2D || (typeId&0x10) != 0 {
-		return &ObjectDatagramType{}, fmt.Errorf("invalid datagram type ID: 0x%x", typeId)
+		return &ObjectDatagramType{}, model.MOQT_SESSION_TERMINATION_ERROR{
+			ErrorCode: model.MOQT_SESSION_TERMINATION_ERROR_CODE_PROTOCOL_VIOLATION,
+			ReasonPhrase: model.NewReasonPhrase(fmt.Sprintf("invalid object datagram type: 0x%x", typeId)),
+		}
 	}
 
 	dt := ObjectDatagramType{
@@ -105,7 +108,10 @@ func NewObjectDatagramType(typeId uint64) (*ObjectDatagramType, error) {
 	if dt.StatusOrPayload && dt.EndOfGroup {
 		// Depending on strictness, you might return an error or simply force false.
 		// For strict correctness based on Table 5:
-		return &ObjectDatagramType{}, fmt.Errorf("invalid type 0x%x: EndOfGroup cannot be set on Status objects", typeId)
+		return &ObjectDatagramType{}, model.MOQT_SESSION_TERMINATION_ERROR{
+			ErrorCode: model.MOQT_SESSION_TERMINATION_ERROR_CODE_PROTOCOL_VIOLATION,
+			ReasonPhrase: model.NewReasonPhrase(fmt.Sprintf("invalid object datagram type: 0x%x, Status and EndOfGroup bits cannot both be set", typeId)),
+		}
 	}
 
 	// Note:
