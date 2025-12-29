@@ -18,7 +18,6 @@ const serverDefaultMaxIncomingRequestId = 1000
 const serverDefaultMaxLocalTokenCacheSize = 0
 
 type Server struct {
-	MaxUniStreamsPerConn int
 }
 
 // Starts a while-true loop that accepts connections, sends accepted connection over the channel to get handled by the caller
@@ -43,7 +42,6 @@ func (s *Server) Run(ctx context.Context, uri string, certFile string, keyFile s
 		quicConf := &quic.Config{
 			EnableDatagrams:       true,
 			MaxIncomingStreams:    1,
-			MaxIncomingUniStreams: int64(s.MaxUniStreamsPerConn),
 		}
 
 		addr := u.Host
@@ -169,7 +167,7 @@ func (s *Server) performHandshake(ctx context.Context, sess *session.Session, se
 	if err != nil {
 		return fmt.Errorf("sess.Cmf.ReadControlMessage() Failed to read CLIENT_SETUP message: %w", err)
 	}
-	fmt.Printf("[DEBUG] Receiver message from the control stream: %#v\n", msg)
+	fmt.Printf("[DEBUG] Received message from the control stream: %#v\n", msg)
 
 	clientSetupMsg, ok := msg.(*control.ClientSetupMessage)
 	if !ok {

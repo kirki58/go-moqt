@@ -5,17 +5,27 @@ import (
 	"go-moq/internal"
 	"go-moq/pkg/model"
 	"go-moq/pkg/session/control"
+	"time"
+
+	"golang.org/x/net/context"
 )
 func main() {
-    client := moqt.Client{}
+    client := moqt.Client{MaxIncomingUniStreamsPerConn: 100}
 
-    // Ensure the Connect function uses the updated quicConf with MaxIncomingStreams!
-    conn, err := client.Connect("moqt://localhost:4443")
+    bkgContext := context.Background()
+
+    dialUpCtx, cancel := context.WithTimeout(bkgContext, 5*time.Second)
+    defer cancel()
+
+    conn, err := client.Connect(dialUpCtx ,"moqt://localhost:4443")
     if err != nil {
         panic(err)
     }
 
-    sess, err := client.InitiateSession(conn, []model.MoqtKeyValuePair{
+    sessInitCtx, cancel := context.WithTimeout(bkgContext, 5*time.Second)
+    defer cancel()
+    
+    sess, err := client.InitiateSession(sessInitCtx, conn, []model.MoqtKeyValuePair{
         internal.Must(model.NewMoqtKeyValuePair(control.SetupParamMaxRequestID, uint64(100))),
     })
     if err != nil {
