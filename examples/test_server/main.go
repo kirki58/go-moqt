@@ -9,18 +9,24 @@ import (
 	"go-moq/pkg/session/control"
 	"go-moq/pkg/transport"
 	"log"
+	"os"
+	"os/signal"
+	"syscall"
 	"time"
 )
 
 func main() {
     srv := moqt.Server{
         MaxUniStreamsPerConn:        100,
-        WaitForControlStreamTimeout: 10 * time.Second, // 10 seconds until receiving a control stream open request
     }
 
     // 1. Run the server in a separate goroutine
     connsCh := make(chan transport.MOQTConnection, 100) // 100 connections can handshake at the same time without blocking the accepting of the new connections.
-    ctx := context.Background()
+    defer close(connsCh)
+
+    ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+    defer stop()
+
     go func() {
         err := srv.Run(ctx ,"moqt://localhost:4443", "../../local_certs/localhost.pem", "../../local_certs/localhost-key.pem", connsCh)
         if err != nil {
@@ -37,7 +43,9 @@ func main() {
 
         // Spawn a handler for this specific connection
         go func(c transport.MOQTConnection){
-            sess, err := srv.InitateSession(ctx, c, []model.MoqtKeyValuePair{
+            timeCtx, cancel := context.WithTimeout(ctx, 5*time.Second) // give 5 seconds max. for session initializiton
+            defer cancel()
+            sess, err := srv.InitateSession(timeCtx, c, []model.MoqtKeyValuePair{
                 internal.Must(model.NewMoqtKeyValuePair(control.SetupParamMaxRequestID, uint64(100))),
             })
             if err != nil {

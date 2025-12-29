@@ -10,7 +10,6 @@ import (
 	"go-moq/pkg/transport"
 	moqtquic "go-moq/pkg/transport/quic"
 	"net/url"
-	"time"
 
 	"github.com/quic-go/quic-go"
 )
@@ -19,8 +18,7 @@ const serverDefaultMaxIncomingRequestId = 1000
 const serverDefaultMaxLocalTokenCacheSize = 0
 
 type Server struct {
-	MaxUniStreamsPerConn        int
-	WaitForControlStreamTimeout time.Duration
+	MaxUniStreamsPerConn int
 }
 
 // Starts a while-true loop that accepts connections, sends accepted connection over the channel to get handled by the caller
@@ -54,6 +52,8 @@ func (s *Server) Run(ctx context.Context, uri string, certFile string, keyFile s
 		}
 
 		listener, err := quic.ListenAddr(addr, tlsConf, quicConf)
+		defer listener.Close()
+
 		if err != nil {
 			return fmt.Errorf("failed to listen on %s: %w", addr, err)
 		}
@@ -63,6 +63,10 @@ func (s *Server) Run(ctx context.Context, uri string, certFile string, keyFile s
 		for {
 			qConn, err := listener.Accept(ctx)
 			if err != nil {
+				if ctx.Err() != nil {
+					// Context was cancelled, stop the server
+					return ctx.Err()
+				}
 				// Log and continue, or return if it's a permanent error
 				fmt.Printf("[WARN] Accepting connection failed: %v\n", err)
 				continue
@@ -77,7 +81,8 @@ func (s *Server) Run(ctx context.Context, uri string, certFile string, keyFile s
 			case connCh <- moqtConn:
 				// Successfully handed off
 			case <-ctx.Done():
-				return ctx.Err()
+				// Do clean-up, finish in-flight work
+				return ctx.Err() // Context done for some reason while waiting
 			}
 		}
 
@@ -91,12 +96,9 @@ func (s *Server) Run(ctx context.Context, uri string, certFile string, keyFile s
 	}
 }
 
-func (s *Server) InitateSession(parentCtx context.Context, conn transport.MOQTConnection, setupParams []model.MoqtKeyValuePair) (*session.Session, error) {
+func (s *Server) InitateSession(ctx context.Context, conn transport.MOQTConnection, setupParams []model.MoqtKeyValuePair) (*session.Session, error) {
 	// Accept the Control Stream
 	// The Draft-15 spec requires the Client to open this stream immediately after the connection is established
-	ctx, cancel := context.WithTimeout(parentCtx, s.WaitForControlStreamTimeout)
-	defer cancel()
-
 	stream, err := conn.AcceptStream(ctx) // Accept client-initiated control stream.
 	if err != nil {
 		fmt.Printf("[WARN]: Server.InitiateSession(): Failed to accept control stream from %s: %v\n", conn.RemoteHost(), err)
@@ -111,14 +113,15 @@ func (s *Server) InitateSession(parentCtx context.Context, conn transport.MOQTCo
 		Cmf:           control.NewControlMessageFactory(stream),
 	}
 
-	err = s.performHandshake(sess, setupParams)
+	err = s.performHandshake(ctx, sess, setupParams)
 	if err != nil {
-		return nil, err
+		_ = sess.TerminateIfTerminationError(err)
+		return nil, fmt.Errorf("Server.InitiateSession(): Handshake failed with %s: %w", conn.RemoteHost(), err)
 	}
 	return sess, nil
 }
 
-func (s *Server) performHandshake(sess *session.Session, setupParams []model.MoqtKeyValuePair) error { // setup params we
+func (s *Server) performHandshake(ctx context.Context, sess *session.Session, setupParams []model.MoqtKeyValuePair) error { // setup params we
 	// This specification only specifies two uses of bidirectional streams, the control stream, which begins with CLIENT_SETUP, and SUBSCRIBE_NAMESPACE. Bidirectional streams
 	// MUST NOT begin with any other message type unless negotiated. If they do, the peer MUST close the Session with a Protocol Violation.
 	// Objects are sent on unidirectional streams. [Cite: Section 3.3]
@@ -149,10 +152,22 @@ func (s *Server) performHandshake(sess *session.Session, setupParams []model.Moq
 		}
 	}
 
+	// Monitor context to interrupt blocking IO
+	handshakeDone := make(chan struct{})
+	defer close(handshakeDone) // deferred closing of the channel will signal case <-handshakeDone
+	go func() {
+		select {
+		case <-ctx.Done():
+			sess.ControlStream.CancelRead(0)
+			sess.ControlStream.CancelWrite(0)
+		case <-handshakeDone:
+		}
+	}()
+
 	// Wait for CLIENT_SETUP message
 	msg, err := sess.Cmf.ReadControlMessage()
 	if err != nil {
-		return fmt.Errorf("Server.performHandshake(): Failed to read CLIENT_SETUP message: %w", err)
+		return fmt.Errorf("sess.Cmf.ReadControlMessage() Failed to read CLIENT_SETUP message: %w", err)
 	}
 	fmt.Printf("[DEBUG] Receiver message from the control stream: %#v\n", msg)
 
@@ -174,7 +189,7 @@ func (s *Server) performHandshake(sess *session.Session, setupParams []model.Moq
 
 	err = sess.Cmf.WriteControlMessage(&ssMsg)
 	if err != nil {
-		return fmt.Errorf("Server.performHandshake(): Failed to send SERVER_SETUP message: %w", err)
+		return fmt.Errorf("sess.Cmf.WriteControlMessage() Failed to send SERVER_SETUP message: %w", err)
 	}
 	return nil
 }

@@ -1,6 +1,7 @@
 package session
 
 import (
+	"errors"
 	"go-moq/pkg/model"
 	"go-moq/pkg/session/control"
 	"go-moq/pkg/transport"
@@ -116,3 +117,20 @@ type Session struct {
 	trackAliases map[uint64]model.MoqtFullTrackName
 }
 
+// Checks for given error (unwraps wrapped errors sequentially with errors.As()), if it's a type of termination error it will terminate the session and the underlying transport
+// Returns true if the session and transport is terminated, false if they are still alive.
+func (sess *Session) TerminateIfTerminationError(err error) bool{  
+	var terminationError *model.MOQT_SESSION_TERMINATION_ERROR
+	if errors.As(err, &terminationError){
+		// Error is a session termination error
+		// Terminate the session, kill the transport layer (if it exists)
+		if sess.Conn != nil {
+			sess.Conn.CloseWithError(uint64(terminationError.ErrorCode), string(terminationError.ReasonPhrase))
+		}
+
+		// Closing the connection automatically also tears down the control stream, Garbage collector should handle the rest after this point
+		*sess = Session{} // Make session unusable, if there are any other references to this session they will fail to use it. 
+		return true
+	}
+	return false
+}
