@@ -195,7 +195,7 @@ func SHWithPublisherPriority(priority uint8) SubgroupHeaderOption {
 	}
 }
 
-func NewSubGroupHeader(trackAlias uint64, groupId uint64, opts ...SubgroupHeaderOption) (*SubGroupHeader, error) {
+func NewSubGroupHeader(trackAlias uint64, groupId uint64, opts ...SubgroupHeaderOption) *SubGroupHeader {
 	subgroupHeader := &SubGroupHeader{
 		TrackAlias: trackAlias,
 		GroupId:    groupId,
@@ -209,5 +209,5 @@ func NewSubGroupHeader(trackAlias uint64, groupId uint64, opts ...SubgroupHeader
 	typeId := subgroupHeader.SGType.ToUint64()
 	subgroupHeader.SGType.TypeID = typeId
 
-	return subgroupHeader, nil
+	return subgroupHeader
 }
