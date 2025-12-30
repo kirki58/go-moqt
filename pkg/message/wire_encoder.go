@@ -118,3 +118,23 @@ func EncodeObjectDatagramHeader(b *[]byte, dg *ObjectDatagram){
 		*b = quicvarint.Append(*b, uint64(dg.Status.Val))
 	}
 }
+
+// SUBGROUP_HEADER {
+//   Type (i) = 0x10..0x1D,
+//   Track Alias (i),
+//   Group ID (i),
+//   [Subgroup ID (i),]
+//   [Publisher Priority (8),]
+// }
+func EncodeSubgroupHeader(b *[]byte, sgh *SubGroupHeader){
+	*b = quicvarint.Append(*b, sgh.SGType.TypeID)
+	*b = quicvarint.Append(*b, sgh.TrackAlias)
+	*b = quicvarint.Append(*b, sgh.GroupId)
+
+	if sgh.SGType.SGIDMode == SubgroupIdModePresent {
+		*b = quicvarint.Append(*b, sgh.SubgroupId.Val)
+	}
+	if sgh.SGType.PriorityPresent {
+		*b = append(*b, sgh.PublisherPriority.Val)
+	}
+}

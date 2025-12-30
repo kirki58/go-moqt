@@ -221,3 +221,51 @@ func TestEncodeObjectDatagram(t *testing.T) {
 		})
 	}
 }
+
+func TestEncodeSubgroupHeader(t *testing.T) {
+	tests := []struct {
+		name     string
+		sgh      *SubGroupHeader
+		expected []byte
+	}{
+		{
+			name: "Basic Subgroup Header (0x10)",
+			sgh: NewSubGroupHeader(1, 5,
+				SHWithPublisherPriority(8),
+			),
+			expected: []byte{
+				0x10, // Type
+				0x01, // Track Alias
+				0x05, // Group ID (100)
+				0x08, // Publisher Priority (8)
+			},
+		},
+		{
+			name: "Subgroup Header with Extensions, EndOfGroup, Priority and SubgroupId (0x1D)",
+			sgh: NewSubGroupHeader(2, 5,
+				SHWithExtensions(),
+				SHWithSubgroupId(50),
+				SHWithEndOfGroup(),
+				SHWithPublisherPriority(10),
+			),
+			expected: []byte{
+				0x1D, // Type (0b00011101)
+				0x02, // Track Alias
+				0x05, // Group ID (200)
+				0x32, // Subgroup ID (50)
+				0x0A, // Publisher Priority (10)
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var buf []byte
+			EncodeSubgroupHeader(&buf, tt.sgh)
+			if !reflect.DeepEqual(buf, tt.expected) {
+				t.Errorf("EncodeSubGroupHeader() got = %v, want %v", buf, tt.expected)
+			}
+		})
+	}
+	
+}
