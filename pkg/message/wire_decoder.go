@@ -216,3 +216,178 @@ func DecodeObjectDatagram(b []byte) (*ObjectDatagram, int, error){
 
 	return dg, parsed, nil	
 }
+
+// SUBGROUP_HEADER {
+//   Type (i) = 0x10..0x1D,
+//   Track Alias (i),
+//   Group ID (i),
+//   [Subgroup ID (i),]
+//   [Publisher Priority (8),]
+// }
+
+func DecodeSubgroupHeader(b []byte) (*SubGroupHeader, int, error){
+	parsed := 0
+	typId, n, err := quicvarint.Parse(b)
+	parsed += n
+	if err != nil {
+		return nil, parsed, fmt.Errorf("DecodeSubgroupHeader: failed to parse Type ID: %w", err)
+	}
+	b = b[n:]
+
+	sgType, err := NewSubGroupHeaderType(typId)
+	if err != nil {
+		return nil, parsed, fmt.Errorf("DecodeSubgroupHeader: invalid Type ID %d: %w", typId, err)
+	}
+
+	// Decode Track Alias
+	trackAlias, n, err := quicvarint.Parse(b)
+	parsed += n
+	if err != nil {
+		return nil, parsed, fmt.Errorf("DecodeSubgroupHeader: failed to parse Track Alias: %w", err)
+	}
+	b = b[n:]
+
+	// Decode Group ID
+	groupId, n, err := quicvarint.Parse(b)
+	parsed += n
+	if err != nil {
+		return nil, parsed, fmt.Errorf("DecodeSubgroupHeader: failed to parse Group ID: %w", err)
+	}
+	b = b[n:]
+
+	sgh := &SubGroupHeader{
+		SGType:     *sgType,
+		TrackAlias: trackAlias,
+		GroupId:    groupId,
+	}
+
+	// Decode Subgroup ID if present
+	if sgType.SGIDMode == SubgroupIdModePresent {
+		subgroupId, n, err := quicvarint.Parse(b)
+		parsed += n
+		if err != nil {
+			return nil, parsed, fmt.Errorf("DecodeSubgroupHeader: failed to parse Subgroup ID: %w", err)
+		}
+		b = b[n:]
+		sgh.SubgroupId = gonull.NewNullable(subgroupId)
+	}
+
+	// Decode Publisher Priority if present
+	if sgType.PriorityPresent {
+		if len(b) < 1 {
+			return nil, parsed, fmt.Errorf("DecodeSubgroupHeader: insufficient bytes for Publisher Priority")
+		}
+		publisherPriority := b[0]
+		parsed += 1
+		b = b[1:]
+		sgh.PublisherPriority = gonull.NewNullable(publisherPriority)
+	}
+
+	return sgh, parsed, nil
+}
+
+// Track Namespace {
+//   Number of Track Namespace Fields (i),
+//   Track Namespace Field (..) ...
+// }
+
+// Each Track Namespace Field is encoded as follows:
+
+// Track Namespace Field {
+//   Track Namespace Field Length (i),
+//   Track Namespace Field Value (..)
+// }
+
+func DecodeTrackNamespace(b []byte) (model.MoqtTrackNamespace, int, error) {
+	// Decode length
+	parsed := 0
+	noFields, n, err := quicvarint.Parse(b)
+	parsed += n
+	if err != nil {
+		return model.MoqtTrackNamespace{}, parsed, fmt.Errorf("DecodeTrackNamespace: failed to parse Number of Track Namespace Fields: %w", err)
+	}
+	b = b[n:]
+
+	// Decode each Track Namespace Field
+	trackNamespaceFields := make([]string, noFields)
+	for i := range noFields {
+		fieldLen, n, err := quicvarint.Parse(b)
+		parsed += n
+		if err != nil {
+			return model.MoqtTrackNamespace{}, parsed, fmt.Errorf("DecodeTrackNamespace: failed to parse Track Namespace Field Length for field %d: %w", i, err)
+		}
+		b = b[n:]
+
+		if len(b) < int(fieldLen) {
+			return model.MoqtTrackNamespace{}, parsed, fmt.Errorf("DecodeTrackNamespace: insufficient bytes for Track Namespace Field Value, expected %d, got %d", fieldLen, len(b))
+		}
+
+		fieldValue := string(b[:fieldLen])
+		trackNamespaceFields[i] = fieldValue
+		parsed += int(fieldLen)
+		b = b[fieldLen:]
+	}
+	
+	trackNamespace := make([][]byte, noFields)
+	for i, field := range trackNamespaceFields {
+		trackNamespace[i] = []byte(field)
+	}
+	
+	if tn := model.MoqtTrackNamespace(trackNamespace); tn.IsValid(){
+		return tn, parsed, nil
+	} else {
+		return model.MoqtTrackNamespace{}, parsed, model.MOQT_SESSION_TERMINATION_ERROR{
+			ErrorCode:    model.MOQT_SESSION_TERMINATION_ERROR_CODE_PROTOCOL_VIOLATION,
+			ReasonPhrase: model.NewReasonPhrase("Decoded Track Namespace is invalid, due to number of fields"),
+		}
+	}
+}
+
+// FullTrackName {
+//  Track Namespace (..),
+//  Track Name Length (i),
+//  Track Name (..)
+//}
+
+func DecodeMoqtFullTrackName(b []byte) (*model.MoqtFullTrackName, int, error) {
+	parsed := 0
+
+	// Decode Track Namespace
+	trackNamespace, n, err := DecodeTrackNamespace(b)
+	parsed += n
+	if err != nil {
+		return nil, parsed, fmt.Errorf("DecodeMoqtFullTrackName: failed to parse Track Namespace: %w", err)
+	}
+	b = b[n:]
+
+	// Decode Track Name Length
+	trackNameLen, n, err := quicvarint.Parse(b)
+	parsed += n
+	if err != nil {
+		return nil, parsed, fmt.Errorf("DecodeMoqtFullTrackName: failed to parse Track Name Length: %w", err)
+	}
+	b = b[n:]
+
+	// Decode Track Name
+	if len(b) < int(trackNameLen) {
+		return nil, parsed, fmt.Errorf("DecodeMoqtFullTrackName: insufficient bytes for Track Name, expected %d, got %d", trackNameLen, len(b))
+	}
+	trackName := make([]byte, trackNameLen)
+	copy(trackName, b[:trackNameLen])
+	parsed += int(trackNameLen)
+	b = b[trackNameLen:]
+
+	ftn := model.MoqtFullTrackName{
+		Namespace: trackNamespace,
+		Name: trackName,
+	}
+
+	if ftn.IsValid() {
+		return &ftn, parsed, nil
+	} else {
+		return nil, parsed, model.MOQT_SESSION_TERMINATION_ERROR{
+			ErrorCode:    model.MOQT_SESSION_TERMINATION_ERROR_CODE_PROTOCOL_VIOLATION,
+			ReasonPhrase: model.NewReasonPhrase("Decoded Full Track Name is invalid"),
+		}
+	}
+}

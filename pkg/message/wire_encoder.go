@@ -138,3 +138,35 @@ func EncodeSubgroupHeader(b *[]byte, sgh *SubGroupHeader){
 		*b = append(*b, sgh.PublisherPriority.Val)
 	}
 }
+
+// Track Namespace {
+//   Number of Track Namespace Fields (i),
+//   Track Namespace Field (..) ...
+// }
+
+// Each Track Namespace Field is encoded as follows:
+
+// Track Namespace Field {
+//   Track Namespace Field Length (i),
+//   Track Namespace Field Value (..)
+// }
+
+func EncodeTrackNamespace(b* []byte, trackNamespace model.MoqtTrackNamespace){
+	*b = quicvarint.Append(*b, uint64(len(trackNamespace)))
+
+	for _, field := range trackNamespace {
+		*b = quicvarint.Append(*b, uint64(len(field)))
+		*b = append(*b, field...)
+	}
+}
+
+// FullTrackName {
+//  Track Namespace (..),
+//  Track Name Length (i),
+//  Track Name (..)
+//}
+func EncodeMoqtFullTrackName(b* []byte, fullTrackName model.MoqtFullTrackName){
+	EncodeTrackNamespace(b, fullTrackName.Namespace)
+	*b = quicvarint.Append(*b, uint64(len(fullTrackName.Name)))
+	*b = append(*b, fullTrackName.Name...)
+}

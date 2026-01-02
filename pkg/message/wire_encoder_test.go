@@ -267,5 +267,94 @@ func TestEncodeSubgroupHeader(t *testing.T) {
 			}
 		})
 	}
-	
+
+}
+
+func TestEncodeTrackNamespace(t *testing.T) {
+	tests := []struct {
+		name          string
+		trackNamespace model.MoqtTrackNamespace
+		expected      []byte
+	}{
+		{
+			name:          "Empty Track Namespace",
+			trackNamespace: model.MoqtTrackNamespace{},
+			expected:      []byte{0x00}, // Length of 0 fields
+		},
+		{
+			name: "Single Field Track Namespace",
+			trackNamespace: model.MoqtTrackNamespace{
+				[]byte("field1"),
+			},
+			expected: []byte{
+				0x01,       // Number of fields (1)
+				0x06,       // Length of "field1" (6)
+				0x66, 0x69, 0x65, 0x6c, 0x64, 0x31, // "field1"
+			},
+		},
+		{
+			name: "Multiple Field Track Namespace",
+			trackNamespace: model.MoqtTrackNamespace{
+				[]byte("field1"),
+				[]byte("field2"),
+				[]byte("field3"),
+			},
+			expected: []byte{
+				0x03,       // Number of fields (3)
+				0x06,       // Length of "field1" (6)
+				0x66, 0x69, 0x65, 0x6c, 0x64, 0x31, // "field1"
+				0x06,       // Length of "field2" (6)
+				0x66, 0x69, 0x65, 0x6c, 0x64, 0x32, // "field2"
+				0x06,       // Length of "field3" (6)
+				0x66, 0x69, 0x65, 0x6c, 0x64, 0x33, // "field3"
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var buf []byte
+			EncodeTrackNamespace(&buf, tt.trackNamespace)
+			if !reflect.DeepEqual(buf, tt.expected) {
+				t.Errorf("EncodeTrackNamespace() got = %v, want %v", buf, tt.expected)
+			}
+		})
+	}
+}
+
+func TestEncodeMoqtFullTrackName(t *testing.T) {
+	tests := []struct {
+		name          string
+		fullTrackName model.MoqtFullTrackName
+		expected      []byte
+	}{
+		{
+			name: "Simple Full Track Name",
+			fullTrackName: model.MoqtFullTrackName{
+				Namespace: model.MoqtTrackNamespace{
+					[]byte("namespace1"),
+					[]byte("namespace2"),
+				},
+				Name: []byte("trackname"),
+			},
+			expected: []byte{
+				0x02,                               // Number of namespace fields (2)
+				0x0a,                               // Length of "namespace1" (10)
+				0x6e, 0x61, 0x6d, 0x65, 0x73, 0x70, 0x61, 0x63, 0x65, 0x31, // "namespace1"
+				0x0a,                               // Length of "namespace2" (10)
+				0x6e, 0x61, 0x6d, 0x65, 0x73, 0x70, 0x61, 0x63, 0x65, 0x32, // "namespace2"
+				0x09,                               // Length of "trackname" (9)
+				0x74, 0x72, 0x61, 0x63, 0x6b, 0x6e, 0x61, 0x6d, 0x65, // "trackname"
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var buf []byte
+			EncodeMoqtFullTrackName(&buf, tt.fullTrackName)
+			if !reflect.DeepEqual(buf, tt.expected) {
+				t.Errorf("EncodeMoqtFullTrackName() got = %v, want %v", buf, tt.expected)
+			}
+		})
+	}
 }

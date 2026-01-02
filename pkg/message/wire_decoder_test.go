@@ -8,56 +8,56 @@ import (
 	"testing"
 )
 
-func TestDecodeMoqtLocation(t *testing.T){
+func TestDecodeMoqtLocation(t *testing.T) {
 	tests := []struct {
-		name string
-		buf []byte
+		name        string
+		buf         []byte
 		expectedLoc model.MoqtLocation
-		expectedN int
-		expectErr bool
+		expectedN   int
+		expectErr   bool
 	}{
 		{
-			name: "Simple Location",
-			buf: []byte{0x01, 0x02},
+			name:        "Simple Location",
+			buf:         []byte{0x01, 0x02},
 			expectedLoc: model.MoqtLocation{GroupId: 1, ObjectId: 2},
-			expectedN: 2,
-			expectErr: false,
+			expectedN:   2,
+			expectErr:   false,
 		},
 		{
-			name: "Larger GroupId and ObjectId",
-			buf: []byte{0x80, 0x12, 0xD6, 0x87, 0x85, 0xF4, 0xCF, 0x88},
+			name:        "Larger GroupId and ObjectId",
+			buf:         []byte{0x80, 0x12, 0xD6, 0x87, 0x85, 0xF4, 0xCF, 0x88},
 			expectedLoc: model.MoqtLocation{GroupId: 1234567, ObjectId: 99929992},
-			expectedN: 8,
-			expectErr: false,
+			expectedN:   8,
+			expectErr:   false,
 		},
 		{
-			name: "Zero GroupId and ObjectId",
-			buf: []byte{0x00, 0x00},
+			name:        "Zero GroupId and ObjectId",
+			buf:         []byte{0x00, 0x00},
 			expectedLoc: model.MoqtLocation{GroupId: 0, ObjectId: 0},
-			expectedN: 2,
-			expectErr: false,
+			expectedN:   2,
+			expectErr:   false,
 		},
 		{
-			name: "Incomplete Location, (1 byte)",
-			buf: []byte{0x80},
+			name:        "Incomplete Location, (1 byte)",
+			buf:         []byte{0x80},
 			expectedLoc: model.MoqtLocation{},
-			expectedN: 1,
-			expectErr: true,
+			expectedN:   1,
+			expectErr:   true,
 		},
 		{
 			// 0x80 starts with 10 so the varint parser expects 3 more bytes, but found none
-			name: "Incomplete ObjectId, parser expects 3 more bytes",
-			buf: []byte{0x01, 0x80},
+			name:        "Incomplete ObjectId, parser expects 3 more bytes",
+			buf:         []byte{0x01, 0x80},
 			expectedLoc: model.MoqtLocation{},
-			expectedN: 2,
-			expectErr: true,
+			expectedN:   2,
+			expectErr:   true,
 		},
 		{
-			name: "Empty Slice passed",
-			buf: []byte{},
+			name:        "Empty Slice passed",
+			buf:         []byte{},
 			expectedLoc: model.MoqtLocation{},
-			expectedN: 0,
-			expectErr: true,	
+			expectedN:   0,
+			expectErr:   true,
 		},
 	}
 
@@ -84,104 +84,104 @@ func TestDecodeMoqtLocation(t *testing.T){
 	}
 }
 
-func TestDecodeMoqtKeyValuePair(t *testing.T){
+func TestDecodeMoqtKeyValuePair(t *testing.T) {
 	tests := []struct {
-		name string
-		buf []byte
+		name        string
+		buf         []byte
 		expectedKVP model.MoqtKeyValuePair
-		expectedN int
-		expectErr bool
+		expectedN   int
+		expectErr   bool
 	}{
 		{
-			name: "Even Type with 0 uint64 Value",
-			buf: []byte{0x00, 0x00},
+			name:        "Even Type with 0 uint64 Value",
+			buf:         []byte{0x00, 0x00},
 			expectedKVP: internal.Must(model.NewMoqtKeyValuePair(0, uint64(0))),
-			expectedN: 2,
-			expectErr: false,
+			expectedN:   2,
+			expectErr:   false,
 		},
 		{
-			name: "Even Type with simple uint64 Value",
-			buf: []byte{0x02, 0x05},
+			name:        "Even Type with simple uint64 Value",
+			buf:         []byte{0x02, 0x05},
 			expectedKVP: internal.Must(model.NewMoqtKeyValuePair(2, uint64(5))),
-			expectedN: 2,
-			expectErr: false,
+			expectedN:   2,
+			expectErr:   false,
 		},
 		{
-			name: "Even Type with Large uint64 Value",
-			buf: []byte{0x04, 0xc0, 0x00, 0x02, 0x05, 0xa9, 0x0f, 0x51, 0xf3},
+			name:        "Even Type with Large uint64 Value",
+			buf:         []byte{0x04, 0xc0, 0x00, 0x02, 0x05, 0xa9, 0x0f, 0x51, 0xf3},
 			expectedKVP: internal.Must(model.NewMoqtKeyValuePair(4, uint64(2223334445555))),
-			expectedN: 9,
-			expectErr: false,
+			expectedN:   9,
+			expectErr:   false,
 		},
 		{
-			name: "Odd Type with empty []byte Value",
-			buf: []byte{0x01, 0x00},
+			name:        "Odd Type with empty []byte Value",
+			buf:         []byte{0x01, 0x00},
 			expectedKVP: internal.Must(model.NewMoqtKeyValuePair(1, []byte{})),
-			expectedN: 2,
-			expectErr: false,
+			expectedN:   2,
+			expectErr:   false,
 		},
 		{
-			name: "Odd Type with simple []byte Value",
-			buf: []byte{0x03, 0x03, 0x01, 0x02, 0x03},
+			name:        "Odd Type with simple []byte Value",
+			buf:         []byte{0x03, 0x03, 0x01, 0x02, 0x03},
 			expectedKVP: internal.Must(model.NewMoqtKeyValuePair(3, []byte{0x01, 0x02, 0x03})),
-			expectedN: 5,
-			expectErr: false,
+			expectedN:   5,
+			expectErr:   false,
 		},
 		{
-			name: "Odd Type with longer []byte Value",
-			buf: []byte{0x05, 0x0b, 0x68, 0x65, 0x6c, 0x6c, 0x6f, 0x20, 0x77, 0x6f, 0x72, 0x6c, 0x64},
+			name:        "Odd Type with longer []byte Value",
+			buf:         []byte{0x05, 0x0b, 0x68, 0x65, 0x6c, 0x6c, 0x6f, 0x20, 0x77, 0x6f, 0x72, 0x6c, 0x64},
 			expectedKVP: internal.Must(model.NewMoqtKeyValuePair(5, []byte("hello world"))),
-			expectedN: 13,
-			expectErr: false,
+			expectedN:   13,
+			expectErr:   false,
 		},
 		{
-			name: "Even multi-byte long type value",
-			buf: []byte{0x8d, 0x3e, 0xd7, 0x8e, 0x01},
+			name:        "Even multi-byte long type value",
+			buf:         []byte{0x8d, 0x3e, 0xd7, 0x8e, 0x01},
 			expectedKVP: internal.Must(model.NewMoqtKeyValuePair(222222222, uint64(1))),
-			expectedN: 5,
-			expectErr: false,
+			expectedN:   5,
+			expectErr:   false,
 		},
 		{
-			name: "Odd multi-byte long type value",
-			buf: []byte{0x93, 0xde, 0x43, 0x55, 0x01, 0x01},
+			name:        "Odd multi-byte long type value",
+			buf:         []byte{0x93, 0xde, 0x43, 0x55, 0x01, 0x01},
 			expectedKVP: internal.Must(model.NewMoqtKeyValuePair(333333333, []byte{0x01})),
-			expectedN: 6,
-			expectErr: false,
+			expectedN:   6,
+			expectErr:   false,
 		},
 		{
-			name: "Incomplete Even Type - Missing Value",
-			buf: []byte{0x02},
+			name:        "Incomplete Even Type - Missing Value",
+			buf:         []byte{0x02},
 			expectedKVP: model.MoqtKeyValuePair{},
-			expectedN: 1,
-			expectErr: true,
+			expectedN:   1,
+			expectErr:   true,
 		},
 		{
-			name: "Incomplete Odd Type - Missing Length",
-			buf: []byte{0x03},
+			name:        "Incomplete Odd Type - Missing Length",
+			buf:         []byte{0x03},
 			expectedKVP: model.MoqtKeyValuePair{},
-			expectedN: 1,
-			expectErr: true,
+			expectedN:   1,
+			expectErr:   true,
 		},
 		{
-			name: "Incomplete Odd Type - Missing Value Bytes",
-			buf: []byte{0x03, 0x03, 0x01, 0x02}, // Length is 3, but only 2 bytes provided
+			name:        "Incomplete Odd Type - Missing Value Bytes",
+			buf:         []byte{0x03, 0x03, 0x01, 0x02}, // Length is 3, but only 2 bytes provided
 			expectedKVP: model.MoqtKeyValuePair{},
-			expectedN: 4,
-			expectErr: true,
+			expectedN:   4,
+			expectErr:   true,
 		},
 		{
-			name: "Empty Slice passed",
-			buf: []byte{},
+			name:        "Empty Slice passed",
+			buf:         []byte{},
 			expectedKVP: model.MoqtKeyValuePair{},
-			expectedN: 0,
-			expectErr: true,
+			expectedN:   0,
+			expectErr:   true,
 		},
 		{
-			name: "Invalid Type (odd type with uint64 value)",
-			buf: []byte{0x01, 0x05}, // Type 1 is odd, so it expects length and then bytes, not a uint64 value
+			name:        "Invalid Type (odd type with uint64 value)",
+			buf:         []byte{0x01, 0x05}, // Type 1 is odd, so it expects length and then bytes, not a uint64 value
 			expectedKVP: model.MoqtKeyValuePair{},
-			expectedN: 2,
-			expectErr: true,
+			expectedN:   2,
+			expectErr:   true,
 		},
 		// {
 		// 	name: "Invalid Type (even type with byte slice value)",
@@ -215,24 +215,24 @@ func TestDecodeMoqtKeyValuePair(t *testing.T){
 	}
 }
 
-func TestDecodeExtensions(t *testing.T){
+func TestDecodeExtensions(t *testing.T) {
 	tests := []struct {
-		name string
-		buf []byte
+		name         string
+		buf          []byte
 		expectedKVPs []model.MoqtKeyValuePair
-		expectedN int
-		expectErr bool
+		expectedN    int
+		expectErr    bool
 	}{
 		{
-			name: "0 Extensions (empty slice)",
-			buf: []byte{0x00}, // Only length given
+			name:         "0 Extensions (empty slice)",
+			buf:          []byte{0x00}, // Only length given
 			expectedKVPs: []model.MoqtKeyValuePair{},
-			expectedN: 1,
-			expectErr: false,
+			expectedN:    1,
+			expectErr:    false,
 		},
 		{
 			name: "1 Extension",
-			buf: []byte{0x01, 0x02, 0x0A},
+			buf:  []byte{0x01, 0x02, 0x0A},
 			expectedKVPs: []model.MoqtKeyValuePair{
 				internal.Must(model.NewMoqtKeyValuePair(2, uint64(10))),
 			},
@@ -254,30 +254,30 @@ func TestDecodeExtensions(t *testing.T){
 				internal.Must(model.NewMoqtKeyValuePair(1, []byte{0x01, 0x02})),
 				internal.Must(model.NewMoqtKeyValuePair(2, uint64(3))),
 				internal.Must(model.NewMoqtKeyValuePair(3, []byte{0x04, 0x05, 0x06})),
-				internal.Must(model.NewMoqtKeyValuePair(4, uint64(5))),			},
+				internal.Must(model.NewMoqtKeyValuePair(4, uint64(5)))},
 			expectedN: 16,
 			expectErr: false,
 		},
 		{
-			name: "Incomplete Extensions - Missing KVP",
-			buf: []byte{0x01, 0x02}, // Length is 1, but only type 2 is provided, missing value
+			name:         "Incomplete Extensions - Missing KVP",
+			buf:          []byte{0x01, 0x02}, // Length is 1, but only type 2 is provided, missing value
 			expectedKVPs: nil,
-			expectedN: 2,
-			expectErr: true,
+			expectedN:    2,
+			expectErr:    true,
 		},
 		{
-			name: "Incomplete Extensions - Missing KVP entirely",
-			buf: []byte{0x01}, // Length is 1, but no KVP is provided
+			name:         "Incomplete Extensions - Missing KVP entirely",
+			buf:          []byte{0x01}, // Length is 1, but no KVP is provided
 			expectedKVPs: nil,
-			expectedN: 1,
-			expectErr: true,
+			expectedN:    1,
+			expectErr:    true,
 		},
 		{
-			name: "Empty Slice passed",
-			buf: []byte{},
+			name:         "Empty Slice passed",
+			buf:          []byte{},
 			expectedKVPs: nil,
-			expectedN: 0,
-			expectErr: true,
+			expectedN:    0,
+			expectErr:    true,
 		},
 	}
 
@@ -304,13 +304,13 @@ func TestDecodeExtensions(t *testing.T){
 	}
 }
 
-func TestDecodeObjectDatagram(t *testing.T){
+func TestDecodeObjectDatagram(t *testing.T) {
 	tests := []struct {
-		name string
-		buf []byte
+		name       string
+		buf        []byte
 		expectedDG *ObjectDatagram
-		expectedN int
-		expectErr bool
+		expectedN  int
+		expectErr  bool
 	}{
 		{
 			name: "0x03 ObjectDatagram",
@@ -395,13 +395,12 @@ func TestDecodeObjectDatagram(t *testing.T){
 			)),
 			expectedN: 13,
 		},
-
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			dg, n, err := DecodeObjectDatagram(tt.buf)
-			
+
 			if tt.expectErr {
 				if err == nil {
 					t.Errorf("DecodeObjectDatagram() expected an error, but got none")
@@ -415,6 +414,170 @@ func TestDecodeObjectDatagram(t *testing.T){
 				}
 				if n != tt.expectedN {
 					t.Errorf("DecodeObjectDatagram() got parsed bytes = %v, want %v", n, tt.expectedN)
+				}
+			}
+		})
+	}
+}
+
+func TestDecodeSubgroupHeader(t *testing.T) {
+	tests := []struct {
+		name        string
+		buf         []byte
+		expectedSGH *SubGroupHeader
+		expectedN   int
+		expectErr   bool
+	}{
+		{
+			name: "Basic Subgroup Header (0x10)",
+			buf: []byte{
+				0x10, // Type
+				0x01, // Track Alias
+				0x05, // Group ID
+				0x08, // Publisher Priority
+			},
+			expectedSGH: NewSubGroupHeader(1, 5,
+				SHWithPublisherPriority(8),
+			),
+			expectedN: 4,
+			expectErr: false,
+		},
+		{
+			name: "0x1D subgroup header, all fields present",
+			buf: []byte{
+				0x1D, // Type
+				0x01, // Track Alias
+				0x05, // Group ID
+				0x0A, // Subgroup ID
+				0x08, // Publisher Priority
+			},
+			expectedSGH: NewSubGroupHeader(1, 5,
+				SHWithSubgroupId(10),
+				SHWithPublisherPriority(8),
+				SHWithExtensions(),
+				SHWithEndOfGroup(),
+			),
+			expectedN: 5,
+			expectErr: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			sgh, n, err := DecodeSubgroupHeader(tt.buf)
+
+			if tt.expectErr {
+				if err == nil {
+					t.Errorf("DecodeSubgroupHeader() expected an error, but got none")
+				}
+			} else {
+				if err != nil {
+					t.Errorf("DecodeSubgroupHeader() unexpected error: %v", err)
+				}
+				if !reflect.DeepEqual(sgh, tt.expectedSGH) {
+					t.Errorf("DecodeSubgroupHeader() got = %+v, want %+v", *sgh, *(tt.expectedSGH))
+				}
+				if n != tt.expectedN {
+					t.Errorf("DecodeSubgroupHeader() got parsed bytes = %v, want %v", n, tt.expectedN)
+				}
+			}
+		})
+	}
+}
+
+func TestDecodeTrackNamespace(t *testing.T) {
+	tests := []struct {
+		name                   string
+		buf                    []byte
+		expectedTrackNamespace model.MoqtTrackNamespace
+		expectedN              int
+		expectErr              bool
+	}{
+		{
+			name: "Regular track namespace with 2 fields",
+			buf: []byte{
+				0x02,       // Number of Track Namespace Fields (2)
+				0x05,       // Length of first field (5)
+				'h', 'e', 'l', 'l', 'o', // First field value ("hello")
+				0x05,       // Length of second field (5)
+				'w', 'o', 'r', 'l', 'd', // Second field value ("world")
+			},
+			expectedTrackNamespace: model.MoqtTrackNamespace([][]byte{
+				[]byte("hello"),
+				[]byte("world"),
+			}),
+			expectedN: 13,
+			expectErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tn, n, err := DecodeTrackNamespace(tt.buf)
+
+			if tt.expectErr {
+				if err == nil {
+					t.Errorf("DecodeTrackNamespace() expected an error, but got none")
+				}
+			} else {
+				if err != nil {
+					t.Errorf("DecodeTrackNamespace() unexpected error: %v", err)
+				}
+				if !reflect.DeepEqual(tn, tt.expectedTrackNamespace) {
+					t.Errorf("DecodeTrackNamespace() got track namespace = %v, want %v", tn, tt.expectedTrackNamespace)
+				}
+				if n != tt.expectedN {
+					t.Errorf("DecodeTrackNamespace() got parsed bytes = %v, want %v", n, tt.expectedN)
+				}
+			}
+		})
+	}
+}
+
+func TestDecodeMoqtFullTrackName(t *testing.T) {
+	tests := []struct {
+		name                 string
+		buf                  []byte
+		expectedFullTrackName *model.MoqtFullTrackName
+		expectedN            int
+		expectErr            bool
+	}{
+		{
+			name: "Regular full track name with 1 track name field and track name",
+			buf: []byte{
+				0x01,       // Number of Track Namespace Fields (1)
+				0x05,       // Length of first field (5)
+				'h', 'e', 'l', 'l', 'o', // First field value ("hello")
+				0x05,       // Length of Track Name (5)
+				'w', 'o', 'r', 'l', 'd', // Track Name value ("world")
+			},
+			expectedFullTrackName: &model.MoqtFullTrackName{
+				Namespace: model.MoqtTrackNamespace([][]byte{
+					[]byte("hello"),
+				}),
+				Name: []byte("world"),
+			},
+			expectedN: 13,
+			expectErr: false, 
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ftn, n, err := DecodeMoqtFullTrackName(tt.buf)
+
+			if tt.expectErr {
+				if err == nil {
+					t.Errorf("DecodeMoqtFullTrackName() expected an error, but got none")
+				}
+			} else {
+				if err != nil {
+					t.Errorf("DecodeMoqtFullTrackName() unexpected error: %v", err)
+				}
+				if !reflect.DeepEqual(ftn, tt.expectedFullTrackName) {
+					t.Errorf("DecodeMoqtFullTrackName() got full track name = %v, want %v", ftn, tt.expectedFullTrackName)
+				}
+				if n != tt.expectedN {
+					t.Errorf("DecodeMoqtFullTrackName() got parsed bytes = %v, want %v", n, tt.expectedN)
 				}
 			}
 		})
