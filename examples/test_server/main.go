@@ -5,6 +5,7 @@ import (
 	"fmt"
 	moqt "go-moq"
 	"go-moq/internal"
+	"go-moq/pkg/message"
 	"go-moq/pkg/model"
 	"go-moq/pkg/session/control"
 	"go-moq/pkg/transport"
@@ -55,6 +56,20 @@ func main() {
 				return
 			}
 			fmt.Printf("Session initiated with %s\n", sess.Conn.RemoteHost())
+
+			// Send a "Welcome" datagram to the peer
+
+			// Construct the object datagram
+			objDg, err := message.NewObjectDatagram(0, 0, 
+				message.WithPayload([]byte("Welcome...")),
+			)
+			if err != nil {
+				fmt.Printf("Failed to create object datagram: %v\n", err)
+			}else{
+				// 2. Send it
+				sess.SendObjectDatagram(objDg)
+				fmt.Printf("Sent welcome datagram to %s\n", sess.Conn.RemoteHost())
+			}
 		}(conn)
 	}
 }

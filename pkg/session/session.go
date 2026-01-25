@@ -1,7 +1,9 @@
 package session
 
 import (
+	"context"
 	"errors"
+	"go-moq/pkg/message"
 	"go-moq/pkg/model"
 	"go-moq/pkg/session/control"
 	"go-moq/pkg/transport"
@@ -133,4 +135,27 @@ func (sess *Session) TerminateIfTerminationError(err error) bool{
 		return true
 	}
 	return false
+}
+
+func (sess *Session) SendObjectDatagram(obj *message.ObjectDatagram) error{
+	dgBuf := make([]byte, 0, 256) // Initial capacity of 256 bytes
+
+	message.EncodeObjectDatagram(&dgBuf, obj)
+
+	return sess.Conn.SendDatagram(dgBuf)
+}
+
+func (sess *Session) ReceiveObjectDatagram(ctx context.Context) (*message.ObjectDatagram, error){
+	msgBytes, err := sess.Conn.ReceiveDatagram(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	objDg, _, err := message.DecodeObjectDatagram(msgBytes)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return objDg, nil
 }

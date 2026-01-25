@@ -95,3 +95,16 @@ func (c *Connection) Context() context.Context {
 func (c *Connection) RemoteHost() string {
 	return c.Conn.RemoteAddr().String()
 }
+
+// Note: Maximum Transmission Unit (MTU) for QUIC is dynamic
+// As a result Max. Datagram sizes are dynamic too for a connection
+// MTU will be 1200 bytes at minimum guaranteed.
+// Datagrams exceeding the limit at the current time will be dropped and will not be retransmitted
+func (c *Connection) SendDatagram(datagram []byte) error {
+	return c.Conn.SendDatagram(datagram)
+}
+
+func (c *Connection) ReceiveDatagram(ctx context.Context) ([]byte, error){
+	msg, err := c.Conn.ReceiveDatagram(ctx)
+	return msg, err
+}

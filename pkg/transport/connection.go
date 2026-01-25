@@ -38,4 +38,6 @@ type MOQTConnection interface {
 	CloseWithError(uint64 , string) error // Terminates the session with the given error information
 	Context() context.Context // Returns a context that lives throughout the connection (until it's closed)
 	RemoteHost() string // Returns the remote host address
+	SendDatagram([]byte) error // Sends a datagram to the peer
+	ReceiveDatagram(context.Context) ([]byte, error) // Receives a datagram from the peer
 }

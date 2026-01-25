@@ -31,3 +31,5 @@ func (m *MockMOQTConnection) AcceptUniStream(ctx context.Context) (transport.Rec
 func (m *MockMOQTConnection) IsWebTransport() bool { return false }
 func (m *MockMOQTConnection) Context() context.Context { return context.Background() }
 func (m *MockMOQTConnection) RemoteHost() string { return "" }
+func (m *MockMOQTConnection) SendDatagram(data []byte) error { return nil }
+func (m *MockMOQTConnection) ReceiveDatagram(ctx context.Context) ([]byte, error) { return nil, nil }
