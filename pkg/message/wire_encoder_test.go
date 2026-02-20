@@ -358,3 +358,32 @@ func TestEncodeMoqtFullTrackName(t *testing.T) {
 		})
 	}
 }
+
+func TestEncodeMoqtReasonPhrase(t *testing.T) {
+	tests := []struct {
+		name         string
+		reasonPhrase model.MoqtReasonPhrase
+		expected     []byte
+	}{
+		{
+			name:         "Simple Reason Phrase",
+			reasonPhrase: model.MoqtReasonPhrase("error"),
+			expected:     []byte{0x05, 'e', 'r', 'r', 'o', 'r'},
+		},
+		{
+			name:         "Empty Reason Phrase",
+			reasonPhrase: model.MoqtReasonPhrase(""),
+			expected:     []byte{0x00},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var buf []byte
+			EncodeMoqtReasonPhrase(&buf, tt.reasonPhrase)
+			if !reflect.DeepEqual(buf, tt.expected) {
+				t.Errorf("EncodeMoqtReasonPhrase() got = %v, want %v", buf, tt.expected)
+			}
+		})
+	}
+}

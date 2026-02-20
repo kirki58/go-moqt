@@ -58,6 +58,10 @@ type SessionState struct {
 	// We send updates to this value via MAX_REQUEST_ID control messages.
 	MaxIncomingRequestID uint64
 
+	// Track Alias Generation
+	NextTrackAlias uint64
+	AliasMutex     sync.Mutex
+
 	// --- Authorization State ---
 
 	// PeerMaxTokenCacheSize is the limit of token data the PEER is willing to store.
@@ -116,7 +120,24 @@ type Session struct {
 
 	State *SessionState
 
-	trackAliases map[uint64]model.MoqtFullTrackName
+	// -- Subscription State --
+
+	// sendingSubscriptions tracks subscriptions where WE are the Subscriber (we sent SUBSCRIBE).
+	// Key: RequestID (Subscribe ID)
+	SendingSubscriptions map[uint64]*Subscription
+
+	// receivingSubscriptions tracks subscriptions where WE are the Publisher (peer sent SUBSCRIBE).
+	// Key: RequestID (Subscribe ID)
+	ReceivingSubscriptions map[uint64]*Subscription
+
+	// incomingTracksByAlias maps Track Aliases to Subscriptions for fast lookup of incoming OBJECT messages.
+	// Only populated for subscriptions where we are the Subscriber (receiving data).
+	IncomingTracksByAlias map[uint64]*Subscription
+
+	// activeSubscriptionNames tracks active subscriptions by their full track name strings.
+	// Key: Full Track Name (String representation), Value: RequestID (of the active subscription).
+	// Used by Publisher to efficiently check for duplicate subscriptions.
+	ActiveSubscriptionNames map[string]uint64
 }
 
 // Checks for given error (unwraps wrapped errors sequentially with errors.As()), if it's a type of termination error it will terminate the session and the underlying transport

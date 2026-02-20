@@ -391,3 +391,28 @@ func DecodeMoqtFullTrackName(b []byte) (*model.MoqtFullTrackName, int, error) {
 		}
 	}
 }
+
+// Reason Phrase {
+//   Reason Phrase Length (i),
+//   Reason Phrase Value (..)
+// }
+
+func DecodeMoqtReasonPhrase(b []byte) (model.MoqtReasonPhrase, int, error) {
+	parsed := 0
+	reasonPhraseLen, n, err := quicvarint.Parse(b)
+
+	parsed += n
+	if err != nil {
+		return "", parsed, fmt.Errorf("DecodeMoqtReasonPhrase: failed to parse Reason Phrase Length: %w", err)
+	}
+	b = b[n:]
+
+	if len(b) < int(reasonPhraseLen) {
+		return "", parsed, fmt.Errorf("DecodeMoqtReasonPhrase: insufficient bytes for Reason Phrase Value, expected %d, got %d", reasonPhraseLen, len(b))
+	}
+
+	reasonPhrase := string(b[:reasonPhraseLen])
+	parsed += int(reasonPhraseLen)
+
+	return model.MoqtReasonPhrase(reasonPhrase), parsed, nil
+}

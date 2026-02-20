@@ -583,3 +583,64 @@ func TestDecodeMoqtFullTrackName(t *testing.T) {
 		})
 	}
 }
+
+func TestDecodeMoqtReasonPhrase(t *testing.T) {
+	tests := []struct {
+		name               string
+		buf                []byte
+		expectedReason     model.MoqtReasonPhrase
+		expectedN          int
+		expectErr          bool
+	}{
+		{
+			name:           "Simple Reason Phrase",
+			buf:            []byte{0x05, 'e', 'r', 'r', 'o', 'r'},
+			expectedReason: "error",
+			expectedN:      6,
+			expectErr:      false,
+		},
+		{
+			name:           "Empty Reason Phrase",
+			buf:            []byte{0x00},
+			expectedReason: "",
+			expectedN:      1,
+			expectErr:      false,
+		},
+		{
+			name:           "Incomplete Reason Phrase - Missing Value",
+			buf:            []byte{0x05, 'e', 'r', 'r'},
+			expectedReason: "",
+			expectedN:      1,
+			expectErr:      true,
+		},
+		{
+			name:           "Empty Slice",
+			buf:            []byte{},
+			expectedReason: "",
+			expectedN:      0,
+			expectErr:      true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			reason, n, err := DecodeMoqtReasonPhrase(tt.buf)
+
+			if tt.expectErr {
+				if err == nil {
+					t.Errorf("DecodeMoqtReasonPhrase() expected an error, but got none")
+				}
+			} else {
+				if err != nil {
+					t.Errorf("DecodeMoqtReasonPhrase() unexpected error: %v", err)
+				}
+				if reason != tt.expectedReason {
+					t.Errorf("DecodeMoqtReasonPhrase() got reason = %v, want %v", reason, tt.expectedReason)
+				}
+				if n != tt.expectedN {
+					t.Errorf("DecodeMoqtReasonPhrase() got parsed bytes = %v, want %v", n, tt.expectedN)
+				}
+			}
+		})
+	}
+}

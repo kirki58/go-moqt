@@ -18,6 +18,7 @@ const serverDefaultMaxIncomingRequestId = 1000
 const serverDefaultMaxLocalTokenCacheSize = 0
 
 type Server struct {
+	trackRegistry TrackRegistry
 }
 
 // Starts a while-true loop that accepts connections, sends accepted connection over the channel to get handled by the caller
