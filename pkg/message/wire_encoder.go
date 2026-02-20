@@ -170,3 +170,13 @@ func EncodeMoqtFullTrackName(b* []byte, fullTrackName model.MoqtFullTrackName){
 	*b = quicvarint.Append(*b, uint64(len(fullTrackName.Name)))
 	*b = append(*b, fullTrackName.Name...)
 }
+
+// Reason Phrase {
+//   Reason Phrase Length (i),
+//   Reason Phrase Value (..)
+// }
+
+func EncodeMoqtReasonPhrase(b* []byte, reasonPhrase model.MoqtReasonPhrase){
+	*b = quicvarint.Append(*b, uint64(len(reasonPhrase)))
+	*b = append(*b, string(reasonPhrase)...)
+}

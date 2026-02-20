@@ -120,7 +120,16 @@ func (cmf *ControlMessageFactory) ReadControlMessage() (ControlMessage, error) {
 
 	case uint64(SERVER_SETUP):
 		msg = &ServerSetupMessage{}
+	
+	case uint64(SUBSCRIBE):
+		msg = &SubscribeMessage{}
 
+	case uint64(SUBSCRIBE_OK):
+		msg = &SubscribeOkMessage{}
+
+	case uint64(REQUEST_ERROR):
+		msg = &RequestErrorMessage{}
+		
 	// TODO: More control messages as we go
 	default:
 		return nil, model.MOQT_SESSION_TERMINATION_ERROR{

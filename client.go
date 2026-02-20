@@ -20,8 +20,8 @@ const defaultMaxLocalTokenCacheSize = 0
 // MOQT Client functionality
 
 type Client struct {
-	// Right now this is empty, but it might be needed in the future to hold things like auth tokens etc.
 	MaxIncomingUniStreamsPerConn int
+	trackRegistry TrackRegistry
 }
 
 // Establish a transport with the fiven URI

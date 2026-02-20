@@ -1,7 +1,6 @@
 package model
 
 import (
-	"fmt"
 	"unicode/utf8"
 )
 
@@ -11,11 +10,11 @@ type MoqtReasonPhrase string
 
 func NewReasonPhrase(phrase string) MoqtReasonPhrase {
 	if len(phrase) > reasonPhraseMaxLen {
-		panic(fmt.Sprintf("Reason Phrase must not exceed %d bytes", reasonPhraseMaxLen))
+		return ""
 	}
 
 	if !utf8.ValidString(phrase) {
-		panic("Reason Phrase must be valid UTF-8 string")
+		return ""
 	}
 
 	return MoqtReasonPhrase(phrase)
