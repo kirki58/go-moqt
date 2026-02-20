@@ -3,6 +3,7 @@ package session
 import (
 	"context"
 	"errors"
+	"fmt"
 	"go-moq/pkg/message"
 	"go-moq/pkg/model"
 	"go-moq/pkg/session/control"
@@ -122,22 +123,24 @@ type Session struct {
 
 	// -- Subscription State --
 
-	// sendingSubscriptions tracks subscriptions where WE are the Subscriber (we sent SUBSCRIBE).
-	// Key: RequestID (Subscribe ID)
-	SendingSubscriptions map[uint64]*Subscription
+	// // sendingSubscriptions tracks subscriptions where WE are the Subscriber (we sent SUBSCRIBE).
+	// // Key: RequestID (Subscribe ID)
+	// SendingSubscriptions map[uint64]*Subscription
 
-	// receivingSubscriptions tracks subscriptions where WE are the Publisher (peer sent SUBSCRIBE).
-	// Key: RequestID (Subscribe ID)
-	ReceivingSubscriptions map[uint64]*Subscription
+	// // receivingSubscriptions tracks subscriptions where WE are the Publisher (peer sent SUBSCRIBE).
+	// // Key: RequestID (Subscribe ID)
+	// ReceivingSubscriptions map[uint64]*Subscription
 
-	// incomingTracksByAlias maps Track Aliases to Subscriptions for fast lookup of incoming OBJECT messages.
-	// Only populated for subscriptions where we are the Subscriber (receiving data).
-	IncomingTracksByAlias map[uint64]*Subscription
+	// // incomingTracksByAlias maps Track Aliases to Subscriptions for fast lookup of incoming OBJECT messages.
+	// // Only populated for subscriptions where we are the Subscriber (receiving data).
+	// IncomingTracksByAlias map[uint64]*Subscription
 
-	// activeSubscriptionNames tracks active subscriptions by their full track name strings.
-	// Key: Full Track Name (String representation), Value: RequestID (of the active subscription).
-	// Used by Publisher to efficiently check for duplicate subscriptions.
-	ActiveSubscriptionNames map[string]uint64
+	// // activeSubscriptionNames tracks active subscriptions by their full track name strings.
+	// // Key: Full Track Name (String representation), Value: RequestID (of the active subscription).
+	// // Used by Publisher to efficiently check for duplicate subscriptions.
+	// ActiveSubscriptionNames map[string]uint64
+
+	handlers map[control.ControlMessageType]Handler
 }
 
 // Checks for given error (unwraps wrapped errors sequentially with errors.As()), if it's a type of termination error it will terminate the session and the underlying transport
@@ -156,6 +159,44 @@ func (sess *Session) TerminateIfTerminationError(err error) bool{
 		return true
 	}
 	return false
+}
+
+func (sess *Session) RegisterHandler(msgType control.ControlMessageType, handler Handler){
+	sess.handlers[msgType] = handler
+}
+
+func (sess *Session) RunControlLoop(){
+	// Constantly read on the control stream, call the appropriate handlers upon receiving messages
+	// Act upon the control message type and contents
+	
+	for{
+		cMsg, err := sess.Cmf.ReadControlMessage()
+		if err != nil{
+			if sess.TerminateIfTerminationError(err) {
+				return
+			}
+			// Non-termination error, just log and continue
+			fmt.Printf("Error reading control message: %v\n", err)
+			continue
+		}
+
+		handler, ok := sess.handlers[cMsg.Type()] // Check registered handlers for this message type
+		if !ok{ // Message type is not supported by the peer
+			// INTERNAL_ERROR termination error because the received control message is unsupported
+			err := model.MOQT_SESSION_TERMINATION_ERROR{
+				ErrorCode:    model.MOQT_SESSION_TERMINATION_ERROR_CODE_INTERNAL_ERROR,
+				ReasonPhrase: model.NewReasonPhrase(fmt.Sprintf("No handler for Control Message Type: %#X", cMsg.Type())),
+			}
+			sess.TerminateIfTerminationError(err)
+			return
+		}
+
+		if err := handler.Handle(sess, cMsg); err != nil {
+			if(sess.TerminateIfTerminationError(err)){
+				return
+			}
+		}
+	}
 }
 
 func (sess *Session) SendObjectDatagram(obj *message.ObjectDatagram) error{

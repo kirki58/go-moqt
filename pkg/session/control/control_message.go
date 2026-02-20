@@ -134,7 +134,7 @@ func (cmf *ControlMessageFactory) ReadControlMessage() (ControlMessage, error) {
 	default:
 		return nil, model.MOQT_SESSION_TERMINATION_ERROR{
 			ErrorCode:    model.MOQT_SESSION_TERMINATION_ERROR_CODE_PROTOCOL_VIOLATION,
-			ReasonPhrase: model.NewReasonPhrase(fmt.Sprintf("Unsupported Control Message Type: %#X", msgType)),
+			ReasonPhrase: model.NewReasonPhrase(fmt.Sprintf("Unknown Control Message Type: %#X", msgType)),
 		}
 	}
 
