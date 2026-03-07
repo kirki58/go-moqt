@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	moqt "go-moq"
+	"go-moq/client"
 	"go-moq/internal"
 	"go-moq/pkg/model"
 	"go-moq/pkg/session/control"
@@ -12,7 +12,7 @@ import (
 )
 
 func main() {
-	client := moqt.Client{MaxIncomingUniStreamsPerConn: 100}
+	client := client.Client{MaxIncomingUniStreamsPerConn: 100}
 
 	bkgContext := context.Background()
 

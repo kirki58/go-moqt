@@ -26,7 +26,7 @@ const (
 	REQUEST_ERROR            ControlMessageType = 0x5
 	SUBSCRIBE                ControlMessageType = 0x3
 	SUBSCRIBE_OK             ControlMessageType = 0x4
-	REQUEST_UPDATE           ControlMessageType = 0x2
+	SUBSCRIBE_UPDATE         ControlMessageType = 0x2
 	UNSUBSCRIBE              ControlMessageType = 0xA
 	PUBLISH                  ControlMessageType = 0x1D
 	PUBLISH_OK               ControlMessageType = 0x1E
@@ -120,7 +120,7 @@ func (cmf *ControlMessageFactory) ReadControlMessage() (ControlMessage, error) {
 
 	case uint64(SERVER_SETUP):
 		msg = &ServerSetupMessage{}
-	
+
 	case uint64(SUBSCRIBE):
 		msg = &SubscribeMessage{}
 
@@ -129,7 +129,7 @@ func (cmf *ControlMessageFactory) ReadControlMessage() (ControlMessage, error) {
 
 	case uint64(REQUEST_ERROR):
 		msg = &RequestErrorMessage{}
-		
+
 	// TODO: More control messages as we go
 	default:
 		return nil, model.MOQT_SESSION_TERMINATION_ERROR{

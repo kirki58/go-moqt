@@ -1,9 +1,10 @@
-package moqt
+package client
 
 import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	moqt "go-moq"
 	"go-moq/pkg/model"
 	"go-moq/pkg/session"
 	"go-moq/pkg/session/control"
@@ -21,7 +22,7 @@ const defaultMaxLocalTokenCacheSize = 0
 
 type Client struct {
 	MaxIncomingUniStreamsPerConn int
-	trackRegistry TrackRegistry
+	trackRegistry moqt.TrackRegistry
 }
 
 // Establish a transport with the fiven URI

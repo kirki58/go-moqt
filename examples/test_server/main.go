@@ -3,12 +3,12 @@ package main
 import (
 	"context"
 	"fmt"
-	moqt "go-moq"
 	"go-moq/internal"
 	"go-moq/pkg/message"
 	"go-moq/pkg/model"
 	"go-moq/pkg/session/control"
 	"go-moq/pkg/transport"
+	"go-moq/server"
 	"log"
 	"os"
 	"os/signal"
@@ -17,7 +17,7 @@ import (
 )
 
 func main() {
-	srv := moqt.Server{}
+	srv := server.Server{}
 
 	// 1. Run the server in a separate goroutine
 	connsCh := make(chan transport.MOQTConnection, 100) // 100 connections can handshake at the same time without blocking the accepting of the new connections.

@@ -48,6 +48,10 @@ type SessionState struct {
 	// Client starts at 0 (increments by 2), Server starts at 1 (increments by 2).
 	NextOutgoingRequestID uint64
 
+	// NextIncomingRequestID is the next ID we **EXPECT** to receive from the other peer
+	// If the remote peer is client NextIncomingRequestID should always be even and it should be odd otherwise
+	NextIncomingRequestID uint64
+
 	// MaxOutgoingRequestID is the limit the PEER has imposed on US.
 	// We cannot send a request if NextOutgoingRequestID >= MaxOutgoingRequestID.
 	// Initialized from the `MAX_REQUEST_ID` param in the received SETUP message.
@@ -81,7 +85,7 @@ type SessionState struct {
 }
 
 // Create a session state with local parameters
-func NewSessionState(localRole Role, maxIncomingRequestId uint64, localTokenCacheSize uint64) *SessionState{
+func NewSessionState(localRole Role, maxIncomingRequestId uint64, localTokenCacheSize uint64) *SessionState {
 	state := &SessionState{
 		LocalRole:             localRole,
 		NextOutgoingRequestID: uint64(localRole), // Client starts at 0, Server at 1
@@ -92,9 +96,9 @@ func NewSessionState(localRole Role, maxIncomingRequestId uint64, localTokenCach
 }
 
 // Populates session state's peer values (not local) with given setup parameters from the peer
-func (state *SessionState) FromParams(params []model.MoqtKeyValuePair){
-	for _, param := range params{
-		switch param.Type{
+func (state *SessionState) FromParams(params []model.MoqtKeyValuePair) {
+	for _, param := range params {
+		switch param.Type {
 		case control.SetupParamMoqtImplementation:
 			state.PeerImplementation = string(param.ValueBytes)
 		case control.SetupParamPath:
@@ -108,7 +112,7 @@ func (state *SessionState) FromParams(params []model.MoqtKeyValuePair){
 		default:
 			continue // Unknown parameter type, just ignore
 
-		// TODO: Implement the handling AuthToken setup parameter later on.
+			// TODO: Implement the handling AuthToken setup parameter later on.
 		}
 	}
 }
@@ -123,55 +127,48 @@ type Session struct {
 
 	// -- Subscription State --
 
-	// // sendingSubscriptions tracks subscriptions where WE are the Subscriber (we sent SUBSCRIBE).
-	// // Key: RequestID (Subscribe ID)
-	// SendingSubscriptions map[uint64]*Subscription
+	//
+	ActiveOutgoingSubscriptionAliases map[uint64]*Subscription
 
-	// // receivingSubscriptions tracks subscriptions where WE are the Publisher (peer sent SUBSCRIBE).
-	// // Key: RequestID (Subscribe ID)
-	// ReceivingSubscriptions map[uint64]*Subscription
+	//
+	ActiveOutgoingSubscriptionNames map[string]*Subscription
 
-	// // incomingTracksByAlias maps Track Aliases to Subscriptions for fast lookup of incoming OBJECT messages.
-	// // Only populated for subscriptions where we are the Subscriber (receiving data).
-	// IncomingTracksByAlias map[uint64]*Subscription
+	//
+	ActiveIncomingSubscriptionAliases map[uint64]*Subscription
 
-	// // activeSubscriptionNames tracks active subscriptions by their full track name strings.
-	// // Key: Full Track Name (String representation), Value: RequestID (of the active subscription).
-	// // Used by Publisher to efficiently check for duplicate subscriptions.
-	// ActiveSubscriptionNames map[string]uint64
+	//
+	ActiveIncomingSubscriptionNames map[string]*Subscription
 
 	handlers map[control.ControlMessageType]Handler
 }
 
 // Checks for given error (unwraps wrapped errors sequentially with errors.As()), if it's a type of termination error it will terminate the session and the underlying transport
 // Returns true if the session and transport is terminated, false if they are still alive.
-func (sess *Session) TerminateIfTerminationError(err error) bool{  
+func (sess *Session) TerminateIfTerminationError(err error) bool {
 	var terminationError *model.MOQT_SESSION_TERMINATION_ERROR
-	if errors.As(err, &terminationError){
+	if errors.As(err, &terminationError) {
 		// Error is a session termination error
 		// Terminate the session, kill the transport layer (if it exists)
 		if sess.Conn != nil {
 			sess.Conn.CloseWithError(uint64(terminationError.ErrorCode), string(terminationError.ReasonPhrase))
 		}
 
-		// Closing the connection automatically also tears down the control stream, Garbage collector should handle the rest after this point
-		*sess = Session{} // Make session unusable, if there are any other references to this session they will fail to use it. 
 		return true
 	}
 	return false
 }
 
-func (sess *Session) RegisterHandler(msgType control.ControlMessageType, handler Handler){
+func (sess *Session) RegisterHandler(msgType control.ControlMessageType, handler Handler) {
 	sess.handlers[msgType] = handler
 }
 
-func (sess *Session) RunControlLoop(){
+func (sess *Session) RunControlLoop() {
 	// Constantly read on the control stream, call the appropriate handlers upon receiving messages
 	// Act upon the control message type and contents
-	
-	for{
+
+	for {
 		cMsg, err := sess.Cmf.ReadControlMessage()
-		if err != nil{
+		if err != nil {
 			if sess.TerminateIfTerminationError(err) {
 				return
 			}
@@ -180,8 +177,23 @@ func (sess *Session) RunControlLoop(){
 			continue
 		}
 
-		handler, ok := sess.handlers[cMsg.Type()] // Check registered handlers for this message type
-		if !ok{ // Message type is not supported by the peer
+		msgType := cMsg.Type()
+
+		// Below listed message types belong to request initiator messages which increment the next expected request id counter for the peer by 2 when received.
+		// Also upon sending one of these messages a peer must increment his own next request id tracker by 2
+
+		// Request ID validity checks for the "RequestID" field they have should be performed in their handler implementation!
+		// A ValidateRequestId function is provided below for this purpose
+		// SUBSCRIBE
+		// FETCH
+		// PUBLISH
+		// TRACK_STATUS
+		// PUBLISH_NAMESPACE
+		// SUBSCRIBE_NAMESPACE 
+		// SUBSCRIBE_UPDATE
+
+		handler, ok := sess.handlers[msgType] // Check registered handlers for this message type
+		if !ok {                                  // Message type is not supported by the peer
 			// INTERNAL_ERROR termination error because the received control message is unsupported
 			err := model.MOQT_SESSION_TERMINATION_ERROR{
 				ErrorCode:    model.MOQT_SESSION_TERMINATION_ERROR_CODE_INTERNAL_ERROR,
@@ -192,14 +204,45 @@ func (sess *Session) RunControlLoop(){
 		}
 
 		if err := handler.Handle(sess, cMsg); err != nil {
-			if(sess.TerminateIfTerminationError(err)){
+			if sess.TerminateIfTerminationError(err) {
 				return
 			}
 		}
 	}
 }
 
-func (sess *Session) SendObjectDatagram(obj *message.ObjectDatagram) error{
+// Validate the request id upon receiving request initiator control messages
+func (sess *Session) ValidateAndIncrementIncomingRequestId(reqId uint64) error {
+	sess.State.RequestIDMutex.Lock()
+	defer sess.State.RequestIDMutex.Unlock()
+
+	// Expected reqid check:
+	// this also ensures the parity correctness
+	// If we are the server, we expect even request ids from the client
+	// if we are the client we expect odd request ids from the server
+
+	if reqId != sess.State.NextIncomingRequestID{
+		return model.MOQT_SESSION_TERMINATION_ERROR{
+			ErrorCode:    model.MOQT_SESSION_TERMINATION_ERROR_CODE_INVALID_REQUEST_ID,
+			ReasonPhrase: model.NewReasonPhrase(fmt.Sprintf("Request ID %d does not match expected NextIncomingRequestID %d", reqId, sess.State.NextIncomingRequestID)),
+		}
+	}
+
+	// Check if the received reqId exceeds the determined max request id for peers self.
+	if reqId >= sess.State.MaxIncomingRequestID {
+		return model.MOQT_SESSION_TERMINATION_ERROR{
+			ErrorCode:    model.MOQT_SESSION_TERMINATION_ERROR_CODE_TOO_MANY_REQUESTS,
+			ReasonPhrase: model.NewReasonPhrase(fmt.Sprintf("Request ID %d exceeds MaxIncomingRequestID %d", reqId, sess.State.MaxIncomingRequestID)),
+		}
+	}
+
+	// Increment to the next expected request id
+	sess.State.NextIncomingRequestID += 2
+
+	return nil
+}
+
+func (sess *Session) SendObjectDatagram(obj *message.ObjectDatagram) error {
 	dgBuf := make([]byte, 0, 256) // Initial capacity of 256 bytes
 
 	message.EncodeObjectDatagram(&dgBuf, obj)
@@ -207,7 +250,7 @@ func (sess *Session) SendObjectDatagram(obj *message.ObjectDatagram) error{
 	return sess.Conn.SendDatagram(dgBuf)
 }
 
-func (sess *Session) ReceiveObjectDatagram(ctx context.Context) (*message.ObjectDatagram, error){
+func (sess *Session) ReceiveObjectDatagram(ctx context.Context) (*message.ObjectDatagram, error) {
 	msgBytes, err := sess.Conn.ReceiveDatagram(ctx)
 	if err != nil {
 		return nil, err

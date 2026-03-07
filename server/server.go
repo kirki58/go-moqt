@@ -1,9 +1,10 @@
-package moqt
+package server
 
 import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	moqt "go-moq"
 	"go-moq/pkg/model"
 	"go-moq/pkg/session"
 	"go-moq/pkg/session/control"
@@ -18,7 +19,7 @@ const serverDefaultMaxIncomingRequestId = 1000
 const serverDefaultMaxLocalTokenCacheSize = 0
 
 type Server struct {
-	trackRegistry TrackRegistry
+	trackRegistry moqt.TrackRegistry
 }
 
 // Starts a while-true loop that accepts connections, sends accepted connection over the channel to get handled by the caller
