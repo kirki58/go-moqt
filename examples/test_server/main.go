@@ -3,9 +3,10 @@ package main
 import (
 	"context"
 	"fmt"
+	moqt "go-moq"
 	"go-moq/internal"
-	"go-moq/pkg/message"
 	"go-moq/pkg/model"
+	"go-moq/pkg/session"
 	"go-moq/pkg/session/control"
 	"go-moq/pkg/transport"
 	"go-moq/server"
@@ -17,7 +18,13 @@ import (
 )
 
 func main() {
-	srv := server.Server{}
+	srv := server.Server{
+		TrackRegistry: moqt.NewSimpleTrackRegistry(),
+	}
+	srv.TrackRegistry.AddTrack(model.MoqtFullTrackName{
+		Namespace: model.MoqtTrackNamespace{[]byte("field1"), []byte("field2")},
+		Name:      []byte("track"),
+	})
 
 	// 1. Run the server in a separate goroutine
 	connsCh := make(chan transport.MOQTConnection, 100) // 100 connections can handshake at the same time without blocking the accepting of the new connections.
@@ -57,19 +64,13 @@ func main() {
 			}
 			fmt.Printf("Session initiated with %s\n", sess.Conn.RemoteHost())
 
-			// Send a "Welcome" datagram to the peer
+			// Register subscribe message handler
+			subHandler := session.SubscribeHandler(srv.HandleSubscribe)
+			sess.RegisterHandler(control.SUBSCRIBE, subHandler)
+			fmt.Print("Subscribe handler registered for the session\n")
 
-			// Construct the object datagram
-			objDg, err := message.NewObjectDatagram(0, 0, 
-				message.WithPayload([]byte("Welcome...")),
-			)
-			if err != nil {
-				fmt.Printf("Failed to create object datagram: %v\n", err)
-			}else{
-				// 2. Send it
-				sess.SendObjectDatagram(objDg)
-				fmt.Printf("Sent welcome datagram to %s\n", sess.Conn.RemoteHost())
-			}
+			// Run control loop
+			sess.RunControlLoop()
 		}(conn)
 	}
 }

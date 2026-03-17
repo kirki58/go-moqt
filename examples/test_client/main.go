@@ -12,7 +12,7 @@ import (
 )
 
 func main() {
-	client := client.Client{MaxIncomingUniStreamsPerConn: 100}
+	client := client.Client{}
 
 	bkgContext := context.Background()
 
@@ -34,15 +34,45 @@ func main() {
 		panic(err)
 	}
 
-	// Receive the "Welcome" object datagram from the server
-	receiveWelcomeCtx, cancel := context.WithTimeout(bkgContext, 5*time.Second)
-	defer cancel()
-	objDg, err := sess.ReceiveObjectDatagram(receiveWelcomeCtx)
+	// Send subscribe message
 
-	if err != nil {
-		panic(err)
+	subMsg := control.SubscribeMessage{
+		RequestId: 0,
+		FullTrackName: &model.MoqtFullTrackName{
+			Namespace: model.MoqtTrackNamespace{[]byte("field1"), []byte("field2")}, // existing track
+			Name:      []byte("track"),
+		},
+		Parameters: []model.MoqtKeyValuePair{},
 	}
-	fmt.Printf("Received Object Datagram from the server: %+v Payload to string is: %s\n", objDg ,string(objDg.Payload.Val))
+	sess.Cmf.WriteControlMessage(&subMsg)
+
+	fmt.Print("Written subscribe message to the control stream")
+
+	// Wait for a response from the control stream:
+	msg, err := sess.Cmf.ReadControlMessage()
+	if err != nil {
+		fmt.Printf("Error reading response: %v\n", err)
+	} else {
+		fmt.Printf("Received response from server: %#v\n", msg)
+	}
+
+	subMsg2 := control.SubscribeMessage{
+		RequestId: 0,
+		FullTrackName: &model.MoqtFullTrackName{
+			Namespace: model.MoqtTrackNamespace{[]byte("non"), []byte("existing")}, // non-existent track
+			Name:      []byte("track"),
+		},
+		Parameters: []model.MoqtKeyValuePair{},
+	}
+	sess.Cmf.WriteControlMessage(&subMsg2)
+
+	// Wait for a response from the control stream:
+	msg, err = sess.Cmf.ReadControlMessage()
+	if err != nil {
+		fmt.Printf("Error reading response: %v\n", err)
+	} else {
+		fmt.Printf("Received response from server: %#v\n", msg)
+	}
 
 	// Keep the client alive
 	select {}

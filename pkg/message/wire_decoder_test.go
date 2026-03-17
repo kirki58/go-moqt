@@ -2,6 +2,7 @@ package message
 
 import (
 	"go-moq/internal"
+	"go-moq/pkg/data"
 	"go-moq/pkg/model"
 
 	"reflect"
@@ -308,7 +309,7 @@ func TestDecodeObjectDatagram(t *testing.T) {
 	tests := []struct {
 		name       string
 		buf        []byte
-		expectedDG *ObjectDatagram
+		expectedDG *data.ObjectDatagram
 		expectedN  int
 		expectErr  bool
 	}{
@@ -338,17 +339,17 @@ func TestDecodeObjectDatagram(t *testing.T) {
 				// Dump the rest with the paylaod as is
 				0x21, 0x22, 0x22, 0xFF,
 			},
-			expectedDG: internal.Must(NewObjectDatagram(1, 2,
-				WithObjectId(12),
-				WithPublisherPriority(12),
-				WithExtensions(
+			expectedDG: internal.Must(data.NewObjectDatagram(1, 2,
+				data.WithObjectId(12),
+				data.WithPublisherPriority(12),
+				data.WithExtensions(
 					[]model.MoqtKeyValuePair{
 						internal.Must(model.NewMoqtKeyValuePair(10, uint64(11))),
 						internal.Must(model.NewMoqtKeyValuePair(21, []byte{0x00, 0x01})),
 					},
 				),
-				WithEndOfGroup(),
-				WithPayload(
+				data.WithEndOfGroup(),
+				data.WithPayload(
 					[]byte{
 						0x21, 0x22, 0x22, 0xFF,
 					},
@@ -382,16 +383,16 @@ func TestDecodeObjectDatagram(t *testing.T) {
 
 				// Payload field ommited entirely in status object
 			},
-			expectedDG: internal.Must(NewObjectDatagram(1, 2,
-				WithObjectId(12),
-				WithPublisherPriority(12),
-				WithExtensions(
+			expectedDG: internal.Must(data.NewObjectDatagram(1, 2,
+				data.WithObjectId(12),
+				data.WithPublisherPriority(12),
+				data.WithExtensions(
 					[]model.MoqtKeyValuePair{
 						internal.Must(model.NewMoqtKeyValuePair(10, uint64(11))),
 						internal.Must(model.NewMoqtKeyValuePair(21, []byte{0x00, 0x01})),
 					},
 				),
-				WithStatus(model.EndOfGroup),
+				data.WithStatus(model.EndOfGroup),
 			)),
 			expectedN: 13,
 		},
@@ -424,7 +425,7 @@ func TestDecodeSubgroupHeader(t *testing.T) {
 	tests := []struct {
 		name        string
 		buf         []byte
-		expectedSGH *SubGroupHeader
+		expectedSGH *data.SubGroupHeader
 		expectedN   int
 		expectErr   bool
 	}{
@@ -436,8 +437,8 @@ func TestDecodeSubgroupHeader(t *testing.T) {
 				0x05, // Group ID
 				0x08, // Publisher Priority
 			},
-			expectedSGH: NewSubGroupHeader(1, 5,
-				SHWithPublisherPriority(8),
+			expectedSGH: data.NewSubGroupHeader(1, 5,
+				data.SHWithPublisherPriority(8),
 			),
 			expectedN: 4,
 			expectErr: false,
@@ -451,11 +452,11 @@ func TestDecodeSubgroupHeader(t *testing.T) {
 				0x0A, // Subgroup ID
 				0x08, // Publisher Priority
 			},
-			expectedSGH: NewSubGroupHeader(1, 5,
-				SHWithSubgroupId(10),
-				SHWithPublisherPriority(8),
-				SHWithExtensions(),
-				SHWithEndOfGroup(),
+			expectedSGH: data.NewSubGroupHeader(1, 5,
+				data.SHWithSubgroupId(10),
+				data.SHWithPublisherPriority(8),
+				data.SHWithExtensions(),
+				data.SHWithEndOfGroup(),
 			),
 			expectedN: 5,
 			expectErr: false,

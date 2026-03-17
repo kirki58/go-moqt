@@ -4,6 +4,7 @@ package message
 
 import (
 	"fmt"
+	"go-moq/pkg/data"
 	"go-moq/pkg/model"
 
 	"github.com/LukaGiorgadze/gonull/v2"
@@ -125,7 +126,7 @@ func DecodeExtensions(b []byte) ([]model.MoqtKeyValuePair, int, error) {
 
 }
 
-func DecodeObjectDatagram(b []byte) (*ObjectDatagram, int, error){
+func DecodeObjectDatagram(b []byte) (*data.ObjectDatagram, int, error){
 	parsed := 0
 	typId, n, err := quicvarint.Parse(b)
 	parsed += n
@@ -136,7 +137,7 @@ func DecodeObjectDatagram(b []byte) (*ObjectDatagram, int, error){
 	b = b[n:]
 
 	// Create ObjectDatagramType from the parsed TypeID
-	dtype, err := NewObjectDatagramType(typId)
+	dtype, err := data.NewObjectDatagramType(typId)
 	if err != nil {
 		return nil, parsed, fmt.Errorf("DecodeObjectDatagram: invalid Type ID %d: %w", typId, err)
 	}
@@ -158,7 +159,7 @@ func DecodeObjectDatagram(b []byte) (*ObjectDatagram, int, error){
 	b = b[n:]
 
 	// Construct the ObjectDatagram
-	dg := &ObjectDatagram{
+	dg := &data.ObjectDatagram{
 		Dtype:      *dtype,
 		TrackAlias: trackAlias,
 		Location:   location,
@@ -225,7 +226,7 @@ func DecodeObjectDatagram(b []byte) (*ObjectDatagram, int, error){
 //   [Publisher Priority (8),]
 // }
 
-func DecodeSubgroupHeader(b []byte) (*SubGroupHeader, int, error){
+func DecodeSubgroupHeader(b []byte) (*data.SubGroupHeader, int, error){
 	parsed := 0
 	typId, n, err := quicvarint.Parse(b)
 	parsed += n
@@ -234,7 +235,7 @@ func DecodeSubgroupHeader(b []byte) (*SubGroupHeader, int, error){
 	}
 	b = b[n:]
 
-	sgType, err := NewSubGroupHeaderType(typId)
+	sgType, err := data.NewSubGroupHeaderType(typId)
 	if err != nil {
 		return nil, parsed, fmt.Errorf("DecodeSubgroupHeader: invalid Type ID %d: %w", typId, err)
 	}
@@ -255,14 +256,14 @@ func DecodeSubgroupHeader(b []byte) (*SubGroupHeader, int, error){
 	}
 	b = b[n:]
 
-	sgh := &SubGroupHeader{
+	sgh := &data.SubGroupHeader{
 		SGType:     *sgType,
 		TrackAlias: trackAlias,
 		GroupId:    groupId,
 	}
 
 	// Decode Subgroup ID if present
-	if sgType.SGIDMode == SubgroupIdModePresent {
+	if sgType.SGIDMode == data.SubgroupIdModePresent {
 		subgroupId, n, err := quicvarint.Parse(b)
 		parsed += n
 		if err != nil {

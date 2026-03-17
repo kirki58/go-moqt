@@ -11,6 +11,7 @@ import (
 	"go-moq/pkg/transport"
 	moqtquic "go-moq/pkg/transport/quic"
 	"net/url"
+	"time"
 
 	"github.com/quic-go/quic-go"
 )
@@ -18,8 +19,10 @@ import (
 const serverDefaultMaxIncomingRequestId = 1000
 const serverDefaultMaxLocalTokenCacheSize = 0
 
+const connMaxIdleTimeout = 60 * time.Second // terminate after 60 seconds of idle connection (no packets received)
+
 type Server struct {
-	trackRegistry moqt.TrackRegistry
+	TrackRegistry moqt.TrackRegistry
 }
 
 // Starts a while-true loop that accepts connections, sends accepted connection over the channel to get handled by the caller
@@ -44,6 +47,7 @@ func (s *Server) Run(ctx context.Context, uri string, certFile string, keyFile s
 		quicConf := &quic.Config{
 			EnableDatagrams:       true,
 			MaxIncomingStreams:    1,
+			MaxIdleTimeout: connMaxIdleTimeout,
 		}
 
 		addr := u.Host
@@ -111,6 +115,8 @@ func (s *Server) InitateSession(ctx context.Context, conn transport.MOQTConnecti
 		Conn:          conn,
 		ControlStream: stream,
 		Cmf:           control.NewControlMessageFactory(stream),
+		Handlers: make(map[control.ControlMessageType]session.Handler),
+		
 	}
 
 	err = s.performHandshake(ctx, sess, setupParams)

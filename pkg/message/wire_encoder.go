@@ -1,6 +1,7 @@
 package message
 
 import (
+	"go-moq/pkg/data"
 	"go-moq/pkg/model"
 
 	"github.com/quic-go/quic-go/quicvarint"
@@ -72,7 +73,7 @@ func EncodeExtensions(b *[]byte, kvPairs []model.MoqtKeyValuePair){
 //   [Object Payload (..),]
 // }
 
-func EncodeObjectDatagram(b *[]byte, dg *ObjectDatagram){
+func EncodeObjectDatagram(b *[]byte, dg *data.ObjectDatagram){
 	*b = quicvarint.Append(*b, dg.Dtype.TypeID)
 	*b = quicvarint.Append(*b, dg.TrackAlias)
 	EncodeMoqtLocation(b, dg.Location) // Note that if object id is ommited than it defaults to 0
@@ -103,7 +104,7 @@ func EncodeObjectDatagram(b *[]byte, dg *ObjectDatagram){
 // In video streams payloads can be big, and Instead of loading them into the memory we might want to directly write them to the network transport stream.
 // After encoding of "only" the header, than writing it to the stream, we can write "payload" to the stream separetly in session implementation
 // The testing for this function is not necessary as long as the common parts of the code are not changed
-func EncodeObjectDatagramHeader(b *[]byte, dg *ObjectDatagram){
+func EncodeObjectDatagramHeader(b *[]byte, dg *data.ObjectDatagram){
 	*b = quicvarint.Append(*b, dg.Dtype.TypeID)
 	*b = quicvarint.Append(*b, dg.TrackAlias)
 	EncodeMoqtLocation(b, dg.Location) // Note that if object id is ommited than it defaults to 0
@@ -126,12 +127,12 @@ func EncodeObjectDatagramHeader(b *[]byte, dg *ObjectDatagram){
 //   [Subgroup ID (i),]
 //   [Publisher Priority (8),]
 // }
-func EncodeSubgroupHeader(b *[]byte, sgh *SubGroupHeader){
+func EncodeSubgroupHeader(b *[]byte, sgh *data.SubGroupHeader){
 	*b = quicvarint.Append(*b, sgh.SGType.TypeID)
 	*b = quicvarint.Append(*b, sgh.TrackAlias)
 	*b = quicvarint.Append(*b, sgh.GroupId)
 
-	if sgh.SGType.SGIDMode == SubgroupIdModePresent {
+	if sgh.SGType.SGIDMode == data.SubgroupIdModePresent {
 		*b = quicvarint.Append(*b, sgh.SubgroupId.Val)
 	}
 	if sgh.SGType.PriorityPresent {

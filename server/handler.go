@@ -7,19 +7,24 @@ import (
 	"go-moq/pkg/session/control"
 )
 
-func (s *Server) handleSubscribe(sess *session.Session, msg control.ControlMessage) error{
+func (s *Server) HandleSubscribe(sess *session.Session, msg control.ControlMessage) error {
 	// Cast into concrete message type
 	subMsg, ok := msg.(*control.SubscribeMessage)
 	if !ok {
 		return fmt.Errorf("expected SubscribeMessage, got %T", msg)
 	}
-	
+
 	// Since this is a request initiating control message we MUST validate and increment the next expected requestid from the peer
 	// This may result in a session termination
 	sess.TerminateIfTerminationError(sess.ValidateAndIncrementIncomingRequestId(subMsg.RequestId))
 
 	// Check if the TrackRegistry has the requested track
-	if !s.trackRegistry.HasTrack(*subMsg.FullTrackName) {
+	if subMsg.FullTrackName == nil {
+		fmt.Println("[DEBUG] Received subscribe message with nil FullTrackName")
+	}
+	fmt.Print(subMsg.FullTrackName.ToString())
+	
+	if !s.TrackRegistry.HasTrack(*subMsg.FullTrackName) {
 		err := model.MOQT_REQUEST_ERROR{
 			ErrorCode:    model.MOQT_REQUEST_ERROR_CODE_DOES_NOT_EXIST,
 			ReasonPhrase: model.NewReasonPhrase("Track does not exist"),
@@ -29,7 +34,7 @@ func (s *Server) handleSubscribe(sess *session.Session, msg control.ControlMessa
 			ErrorCode:   err.ErrorCode,
 			ErrorReason: err.ReasonPhrase,
 		}
-		
+
 		sess.Cmf.WriteControlMessage(reqErrSubMsg)
 		return err
 	}
@@ -52,17 +57,24 @@ func (s *Server) handleSubscribe(sess *session.Session, msg control.ControlMessa
 	sess.State.AliasMutex.Unlock()
 
 	// Create and establish the subscription
-	subscription := &session.Subscription{
-		ID:            subMsg.RequestId,
-		FullTrackName: subMsg.FullTrackName,
-		TrackAlias:    trackAlias,
-		Status:        session.SubscriptionStatusEstablished,
-		Parameters:    subMsg.Parameters,
-	}
+	// subscription := &session.Subscription{
+	// 	ID:            subMsg.RequestId,
+	// 	FullTrackName: subMsg.FullTrackName,
+	// 	TrackAlias:    trackAlias,
+	// 	Status:        session.SubscriptionStatusEstablished,
+	// 	Parameters:    subMsg.Parameters,
+	// }
 
-	// Store subscription state in the session
-	sess.ActiveIncomingSubscriptionNames[subscription.FullTrackName.ToString()] = subscription
-	sess.ActiveIncomingSubscriptionAliases[subscription.TrackAlias] = subscription
+	// // Store subscription state in the session
+	// sess.SubInNamesMutex.Lock()
+	// sess.ActiveIncomingSubscriptionNames[subscription.FullTrackName.ToString()] = subscription
+	// sess.SubInNamesMutex.Unlock()
+
+	// sess.SubInAliasesMutex.Lock()
+	// sess.ActiveIncomingSubscriptionAliases[subscription.TrackAlias] = subscription
+	// sess.SubInAliasesMutex.Unlock()
+
+	// data.GetTrackLargestObject...
 
 	// Send SUBSCRIBE_OK
 	subOkMsg := &control.SubscribeOkMessage{
@@ -72,6 +84,9 @@ func (s *Server) handleSubscribe(sess *session.Session, msg control.ControlMessa
 	}
 
 	// data.StartStream(filters-bla-bla)
+
+	// data should have track structs that keeps of it's subscribers, largest object
+	// data should have streamtrack functions that constantly streams track to subscribers
 
 	if err := sess.Cmf.WriteControlMessage(subOkMsg); err != nil {
 		return fmt.Errorf("failed to send SUBSCRIBE_OK: %w", err)

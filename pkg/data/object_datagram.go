@@ -1,4 +1,4 @@
-package message
+package data
 
 import (
 	"fmt"

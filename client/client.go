@@ -11,6 +11,7 @@ import (
 	"go-moq/pkg/transport"
 	moqtquic "go-moq/pkg/transport/quic" // this alias is important to prevent confusion with "quic-go"
 	"net/url"
+	"time"
 
 	"github.com/quic-go/quic-go"
 )
@@ -18,10 +19,11 @@ import (
 const defaultMaxIncomingRequestId = 1000
 const defaultMaxLocalTokenCacheSize = 0
 
+const connectionKeepAlivePeriod = 15 * time.Second // send PING frames every 15 seconds to keep the connection alive
+
 // MOQT Client functionality
 
 type Client struct {
-	MaxIncomingUniStreamsPerConn int
 	trackRegistry moqt.TrackRegistry
 }
 
@@ -42,7 +44,7 @@ func (c *Client) Connect(ctx context.Context, uri string) (transport.MOQTConnect
 		quicConf := &quic.Config{
 			EnableDatagrams:       true,          // The QUIC Datagram extension MUST be supported. [Cite: Section 3.1]
 			MaxIncomingStreams:    1,             // Only 1 bidirectional stream allowed that is the control stream.
-			MaxIncomingUniStreams: int64(c.MaxIncomingUniStreamsPerConn),
+			KeepAlivePeriod: connectionKeepAlivePeriod,
 		}
 
 		// 2. Dial the QUIC Connection

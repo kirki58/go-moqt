@@ -1,4 +1,4 @@
-package session
+package data
 
 import "go-moq/pkg/model"
 

@@ -2,6 +2,7 @@ package message
 
 import (
 	"go-moq/internal"
+	"go-moq/pkg/data"
 	"go-moq/pkg/model"
 
 	"reflect"
@@ -163,22 +164,22 @@ func TestEncodeExtensions(t *testing.T) {
 func TestEncodeObjectDatagram(t *testing.T) {
 	tests := []struct {
 		name     string
-		datagram *ObjectDatagram
+		datagram *data.ObjectDatagram
 		expected []byte
 	}{
 		{
 			name: "0x03 ObjectDatagram",
-			datagram: internal.Must(NewObjectDatagram(1, 2,
-				WithObjectId(12),
-				WithPublisherPriority(12),
-				WithExtensions(
+			datagram: internal.Must(data.NewObjectDatagram(1, 2,
+				data.WithObjectId(12),
+				data.WithPublisherPriority(12),
+				data.WithExtensions(
 					[]model.MoqtKeyValuePair{
 						internal.Must(model.NewMoqtKeyValuePair(10, uint64(11))),
 						internal.Must(model.NewMoqtKeyValuePair(21, []byte{0x00, 0x01})),
 					},
 				),
-				WithEndOfGroup(),
-				WithPayload(
+				data.WithEndOfGroup(),
+				data.WithPayload(
 					[]byte{
 						0x21, 0x22, 0x22, 0xFF,
 					},
@@ -225,13 +226,13 @@ func TestEncodeObjectDatagram(t *testing.T) {
 func TestEncodeSubgroupHeader(t *testing.T) {
 	tests := []struct {
 		name     string
-		sgh      *SubGroupHeader
+		sgh      *data.SubGroupHeader
 		expected []byte
 	}{
 		{
 			name: "Basic Subgroup Header (0x10)",
-			sgh: NewSubGroupHeader(1, 5,
-				SHWithPublisherPriority(8),
+			sgh: data.NewSubGroupHeader(1, 5,
+				data.SHWithPublisherPriority(8),
 			),
 			expected: []byte{
 				0x10, // Type
@@ -242,11 +243,11 @@ func TestEncodeSubgroupHeader(t *testing.T) {
 		},
 		{
 			name: "Subgroup Header with Extensions, EndOfGroup, Priority and SubgroupId (0x1D)",
-			sgh: NewSubGroupHeader(2, 5,
-				SHWithExtensions(),
-				SHWithSubgroupId(50),
-				SHWithEndOfGroup(),
-				SHWithPublisherPriority(10),
+			sgh: data.NewSubGroupHeader(2, 5,
+				data.SHWithExtensions(),
+				data.SHWithSubgroupId(50),
+				data.SHWithEndOfGroup(),
+				data.SHWithPublisherPriority(10),
 			),
 			expected: []byte{
 				0x1D, // Type (0b00011101)

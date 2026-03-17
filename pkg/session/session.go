@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"go-moq/pkg/data"
 	"go-moq/pkg/message"
 	"go-moq/pkg/model"
 	"go-moq/pkg/session/control"
@@ -124,22 +125,8 @@ type Session struct {
 	Cmf *control.ControlMessageFactory // This is so that the session is able to read and write control messages
 
 	State *SessionState
-
-	// -- Subscription State --
-
-	//
-	ActiveOutgoingSubscriptionAliases map[uint64]*Subscription
-
-	//
-	ActiveOutgoingSubscriptionNames map[string]*Subscription
-
-	//
-	ActiveIncomingSubscriptionAliases map[uint64]*Subscription
-
-	//
-	ActiveIncomingSubscriptionNames map[string]*Subscription
-
-	handlers map[control.ControlMessageType]Handler
+	
+	Handlers map[control.ControlMessageType]Handler
 }
 
 // Checks for given error (unwraps wrapped errors sequentially with errors.As()), if it's a type of termination error it will terminate the session and the underlying transport
@@ -159,7 +146,7 @@ func (sess *Session) TerminateIfTerminationError(err error) bool {
 }
 
 func (sess *Session) RegisterHandler(msgType control.ControlMessageType, handler Handler) {
-	sess.handlers[msgType] = handler
+	sess.Handlers[msgType] = handler
 }
 
 func (sess *Session) RunControlLoop() {
@@ -176,6 +163,7 @@ func (sess *Session) RunControlLoop() {
 			fmt.Printf("Error reading control message: %v\n", err)
 			continue
 		}
+		fmt.Printf("[DEBUG] Received message from the control stream: %#v\n", cMsg)
 
 		msgType := cMsg.Type()
 
@@ -192,7 +180,7 @@ func (sess *Session) RunControlLoop() {
 		// SUBSCRIBE_NAMESPACE 
 		// SUBSCRIBE_UPDATE
 
-		handler, ok := sess.handlers[msgType] // Check registered handlers for this message type
+		handler, ok := sess.Handlers[msgType] // Check registered handlers for this message type
 		if !ok {                                  // Message type is not supported by the peer
 			// INTERNAL_ERROR termination error because the received control message is unsupported
 			err := model.MOQT_SESSION_TERMINATION_ERROR{
@@ -203,7 +191,7 @@ func (sess *Session) RunControlLoop() {
 			return
 		}
 
-		if err := handler.Handle(sess, cMsg); err != nil {
+		if err := handler.Handle(sess, cMsg); err != nil { // might run in a separate goroutine later
 			if sess.TerminateIfTerminationError(err) {
 				return
 			}
@@ -242,7 +230,7 @@ func (sess *Session) ValidateAndIncrementIncomingRequestId(reqId uint64) error {
 	return nil
 }
 
-func (sess *Session) SendObjectDatagram(obj *message.ObjectDatagram) error {
+func (sess *Session) SendObjectDatagram(obj *data.ObjectDatagram) error {
 	dgBuf := make([]byte, 0, 256) // Initial capacity of 256 bytes
 
 	message.EncodeObjectDatagram(&dgBuf, obj)
@@ -250,7 +238,7 @@ func (sess *Session) SendObjectDatagram(obj *message.ObjectDatagram) error {
 	return sess.Conn.SendDatagram(dgBuf)
 }
 
-func (sess *Session) ReceiveObjectDatagram(ctx context.Context) (*message.ObjectDatagram, error) {
+func (sess *Session) ReceiveObjectDatagram(ctx context.Context) (*data.ObjectDatagram, error) {
 	msgBytes, err := sess.Conn.ReceiveDatagram(ctx)
 	if err != nil {
 		return nil, err
