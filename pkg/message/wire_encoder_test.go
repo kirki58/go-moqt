@@ -271,16 +271,89 @@ func TestEncodeSubgroupHeader(t *testing.T) {
 
 }
 
-func TestEncodeTrackNamespace(t *testing.T) {
+func TestEncodeSubgroupObject(t *testing.T) {
 	tests := []struct {
-		name          string
-		trackNamespace model.MoqtTrackNamespace
-		expected      []byte
+		name     string
+		sgo      *data.SubgroupObject
+		expected []byte
 	}{
 		{
-			name:          "Empty Track Namespace",
+			name: "Basic Subgroup Object - Payload",
+			sgo:  internal.Must(data.NewSubgroupObject(0, data.SOWithPayload([]byte{0x00, 0x01}))),
+			expected: []byte{
+				0x00,       // ObjectIdDelta
+				0x02,       // PayloadLength
+				0x00, 0x01, // Payload
+			},
+		},
+		{
+			name: "Basic Subgroup Object - Status",
+			sgo:  internal.Must(data.NewSubgroupObject(0x01, data.SOWithStatus(model.Normal))),
+			expected: []byte{
+				0x01, // ObjectIdDelta
+				0x00, // PayloadLength
+				0x00, // Status
+			},
+		},
+		{
+			name: "Payload Object With Extensions",
+			sgo: internal.Must(data.NewSubgroupObject(0x02,
+				data.SOWithPayload([]byte{0x00, 0x01}),
+				data.SOWithExtensions(
+					[]model.MoqtKeyValuePair{internal.Must(model.NewMoqtKeyValuePair(0, uint64(1)))},
+				),
+			)),
+			expected: []byte{
+				0x02, // ObjectIdDelta
+				// Extensions start
+				0x01,       // Length of extensions (1)
+				0x00, 0x01, // KV1: Type 0, Value 1
+				// Extensions end
+				0x02,       // PayloadLength
+				0x00, 0x01, // Payload
+			},
+		},
+		{
+			name: "Status Object (Normal 0x00) With Extensions",
+			sgo: internal.Must(data.NewSubgroupObject(0x03,
+				data.SOWithStatus(model.Normal),
+				data.SOWithExtensions(
+					[]model.MoqtKeyValuePair{internal.Must(model.NewMoqtKeyValuePair(0, uint64(1)))},
+				),
+			)),
+			expected: []byte{
+				0x03, // ObjectIdDelta
+				// Extensions start
+				0x01,       // Length of extensions (1)
+				0x00, 0x01, // KV1: Type 0, Value 1
+				// Extensions end
+				0x00, // PayloadLength (0 for status)
+				0x00, // Status (Normal)
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var buf []byte
+			EncodeSubgroupObject(&buf, tt.sgo)
+			if !reflect.DeepEqual(buf, tt.expected) {
+				t.Errorf("EncodeSubgroupObject() got = %v, want %v", buf, tt.expected)
+			}
+		})
+	}
+}
+
+func TestEncodeTrackNamespace(t *testing.T) {
+	tests := []struct {
+		name           string
+		trackNamespace model.MoqtTrackNamespace
+		expected       []byte
+	}{
+		{
+			name:           "Empty Track Namespace",
 			trackNamespace: model.MoqtTrackNamespace{},
-			expected:      []byte{0x00}, // Length of 0 fields
+			expected:       []byte{0x00}, // Length of 0 fields
 		},
 		{
 			name: "Single Field Track Namespace",
@@ -288,8 +361,8 @@ func TestEncodeTrackNamespace(t *testing.T) {
 				[]byte("field1"),
 			},
 			expected: []byte{
-				0x01,       // Number of fields (1)
-				0x06,       // Length of "field1" (6)
+				0x01,                               // Number of fields (1)
+				0x06,                               // Length of "field1" (6)
 				0x66, 0x69, 0x65, 0x6c, 0x64, 0x31, // "field1"
 			},
 		},
@@ -301,12 +374,12 @@ func TestEncodeTrackNamespace(t *testing.T) {
 				[]byte("field3"),
 			},
 			expected: []byte{
-				0x03,       // Number of fields (3)
-				0x06,       // Length of "field1" (6)
+				0x03,                               // Number of fields (3)
+				0x06,                               // Length of "field1" (6)
 				0x66, 0x69, 0x65, 0x6c, 0x64, 0x31, // "field1"
-				0x06,       // Length of "field2" (6)
+				0x06,                               // Length of "field2" (6)
 				0x66, 0x69, 0x65, 0x6c, 0x64, 0x32, // "field2"
-				0x06,       // Length of "field3" (6)
+				0x06,                               // Length of "field3" (6)
 				0x66, 0x69, 0x65, 0x6c, 0x64, 0x33, // "field3"
 			},
 		},
@@ -338,12 +411,12 @@ func TestEncodeMoqtFullTrackName(t *testing.T) {
 				Name: []byte("trackname"),
 			},
 			expected: []byte{
-				0x02,                               // Number of namespace fields (2)
-				0x0a,                               // Length of "namespace1" (10)
+				0x02,                                                       // Number of namespace fields (2)
+				0x0a,                                                       // Length of "namespace1" (10)
 				0x6e, 0x61, 0x6d, 0x65, 0x73, 0x70, 0x61, 0x63, 0x65, 0x31, // "namespace1"
-				0x0a,                               // Length of "namespace2" (10)
+				0x0a,                                                       // Length of "namespace2" (10)
 				0x6e, 0x61, 0x6d, 0x65, 0x73, 0x70, 0x61, 0x63, 0x65, 0x32, // "namespace2"
-				0x09,                               // Length of "trackname" (9)
+				0x09,                                                 // Length of "trackname" (9)
 				0x74, 0x72, 0x61, 0x63, 0x6b, 0x6e, 0x61, 0x6d, 0x65, // "trackname"
 			},
 		},

@@ -140,6 +140,30 @@ func EncodeSubgroupHeader(b *[]byte, sgh *data.SubGroupHeader){
 	}
 }
 
+// Subgroup Object{
+//   Object ID Delta (i),
+//   [Extensions (..),]
+//   Object Payload Length (i),
+//   [Object Status (i),]
+//   [Object Payload (..),]
+// }
+
+func EncodeSubgroupObject(b* []byte, sgo *data.SubgroupObject){
+	*b = quicvarint.Append(*b, sgo.ObjectIdDelta) // Encode ObjectIdDelta as varint
+	// Encode extensions if they exist
+	if sgo.Extensions.Valid {
+		EncodeExtensions(b, sgo.Extensions.Val)
+	}
+	// For a status object payload length is encoded as 0 and then the status is encoded
+	if sgo.Status.Valid {
+		*b = quicvarint.Append(*b, uint64(0)) // Encode payload length (which is 0 for a status object)
+		*b = quicvarint.Append(*b, uint64(sgo.Status.Val)) // Encode status value
+	}else if sgo.Payload.Valid {
+		*b = quicvarint.Append(*b, uint64(len(sgo.Payload.Val))) // Encode payload length
+		*b = append(*b, sgo.Payload.Val...) // Encode the buffer in
+	}
+}
+
 // Track Namespace {
 //   Number of Track Namespace Fields (i),
 //   Track Namespace Field (..) ...
