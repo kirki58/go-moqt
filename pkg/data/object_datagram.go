@@ -233,6 +233,8 @@ func WithPayload(payload []byte) ObjectDatagramOption {
 // Rule 1 --> Either WithPayload or WithStatus options are present, they cant be present at once (they are mutually exclusive)
 // Rule 2 --> WithStatus and WithEndOfGroup options are mutually exclusive and they can be both non-existent
 
+// TODO: non-normal status datagrams should NOT be allowed to carry extensions!
+
 func NewObjectDatagram(trackAlias uint64, groupId uint64, opts ...ObjectDatagramOption) (*ObjectDatagram, error){
 	// Define default configuration
 	dg := &ObjectDatagram{
