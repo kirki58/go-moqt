@@ -228,6 +228,14 @@ func DecodeObjectDatagram(b []byte) (*data.ObjectDatagram, int, error){
 		status = model.MoqtObjectStatus(s)
 		b = b[n:]
 
+		if !status.IsValid(){
+			// Protocol violation, status is not in defined range
+			return nil, parsed, model.MOQT_SESSION_TERMINATION_ERROR{
+				ErrorCode:    model.MOQT_SESSION_TERMINATION_ERROR_CODE_PROTOCOL_VIOLATION,
+				ReasonPhrase: model.NewReasonPhrase(fmt.Sprintf("Invalid Object Status: %d", s)),
+			}
+		}
+
 		if status != model.Normal && dtype.ExtensionsPresent {
 			return nil, parsed, model.MOQT_SESSION_TERMINATION_ERROR{
 				ErrorCode:    model.MOQT_SESSION_TERMINATION_ERROR_CODE_PROTOCOL_VIOLATION,
@@ -326,7 +334,10 @@ func DecodeSubgroupHeader(b []byte) (*data.SubGroupHeader, int, error){
 //   [Object Payload (..),]
 // }
 
-func DecodeSubgroupObject(b []byte, extensionsPresent bool) (*data.SubgroupObject, int, error) {
+// Important Note:
+// We need more context in order to properly decode subgroup objects, This context is normally given in a subgroup header.
+// Subgroup headers are responsible for starting a subgroup object stream, all objects in that stream should follow it's constraints
+func DecodeSubgroupObject(b []byte, subgroupHeaderType *data.SubGroupHeaderType) (*data.SubgroupObject, int, error) {
 	parsed := 0
 	objectIdDelta, n, err := quicvarint.Parse(b)
 	parsed += n
@@ -335,62 +346,69 @@ func DecodeSubgroupObject(b []byte, extensionsPresent bool) (*data.SubgroupObjec
 	}
 	b = b[n:]
 
-	var extensions []model.MoqtKeyValuePair
-	if extensionsPresent {
+	sgo := &data.SubgroupObject{
+		ObjectIdDelta: objectIdDelta,
+	}
+
+	if subgroupHeaderType.ExtensionsPresent {
 		ext, n, err := DecodeExtensions(b)
 		parsed += n
 		if err != nil {
 			return nil, parsed, fmt.Errorf("DecodeSubgroupObject: failed to parse Extensions: %w", err)
 		}
-		extensions = ext
 		b = b[n:]
+
+		if ext != nil {
+			sgo.Extensions = gonull.NewNullable(ext)
+		}
+
+		// Note on why we considered 0-length extensions PROTOCOL_VIOLATION with datagrams and yet we don't do that for subgroup objects, The document states that:
+		// For Type values where Extensions Present is No, the Extensions field is never present and all Objects have no extensions. 
+		// When Extensions Present is Yes, the Extensions structure defined in Section 10.2.1.2 is present in all Objects in this subgroup. 
+		// Objects with no extensions set Extension Headers Length to 0.
 	}
 
-	payloadLen, n, err := quicvarint.Parse(b)
+	objPayloadLen, n, err := quicvarint.Parse(b)
 	parsed += n
 	if err != nil {
 		return nil, parsed, fmt.Errorf("DecodeSubgroupObject: failed to parse Object Payload Length: %w", err)
 	}
 	b = b[n:]
 
-	var status model.MoqtObjectStatus
-	var payload []byte
-	if payloadLen == 0 {
-		// If payload length is zero, Object Status is present
-		s, n, err := quicvarint.Parse(b)
+	if objPayloadLen == 0 { // we are looking at a status object
+		statusRead, n, err := quicvarint.Parse(b)
 		parsed += n
 		if err != nil {
 			return nil, parsed, fmt.Errorf("DecodeSubgroupObject: failed to parse Object Status: %w", err)
 		}
-		status = model.MoqtObjectStatus(s)
-		// b = b[n:] // Not strictly needed as we return
-	} else {
-		if uint64(len(b)) < payloadLen {
-			return nil, parsed, fmt.Errorf("DecodeSubgroupObject: insufficient bytes for Payload, expected %d, got %d", payloadLen, len(b))
+	
+		status := model.MoqtObjectStatus(statusRead)
+		if !status.IsValid() {
+			return nil, parsed, model.MOQT_SESSION_TERMINATION_ERROR{
+				ErrorCode:    model.MOQT_SESSION_TERMINATION_ERROR_CODE_PROTOCOL_VIOLATION,
+				ReasonPhrase: model.NewReasonPhrase(fmt.Sprintf("Invalid Object Status: %d", statusRead)),
+			}
 		}
-		payload = make([]byte, payloadLen)
-		copy(payload, b[:payloadLen])
-		parsed += int(payloadLen)
-		// b = b[payloadLen:]
-	}
+		if status != model.Normal && subgroupHeaderType.ExtensionsPresent && len(sgo.Extensions.Val) > 0 {
+			return nil, parsed, model.MOQT_SESSION_TERMINATION_ERROR{
+				ErrorCode:    model.MOQT_SESSION_TERMINATION_ERROR_CODE_PROTOCOL_VIOLATION,
+				ReasonPhrase: model.NewReasonPhrase("Subgroup Object with status other than Normal MUST NOT have extension headers"),
+			}
+		}
+		sgo.Status = gonull.NewNullable(status)
+		return sgo, parsed, nil
+		// b = b[n:]
+	} else { // we are looking at a payload object
+		if len(b) < int(objPayloadLen){ // rest of the slice should contain the entire payload
+			return nil, parsed, fmt.Errorf("DecodeSubgroupObject: insufficient bytes for Object Payload, expected %d, got %d", objPayloadLen, len(b))
+		}
 
-	// Construct SubgroupObject using options for consistency
-	var opts []data.SubgroupObjectOption
-	if extensionsPresent {
-		opts = append(opts, data.SOWithExtensions(extensions))
+		payload := make([]byte, objPayloadLen)
+		copy(payload, b[:objPayloadLen])
+		parsed += int(objPayloadLen)
+		sgo.Payload = gonull.NewNullable(payload)
+		return sgo, parsed, nil
 	}
-	if payloadLen == 0 {
-		opts = append(opts, data.SOWithStatus(status))
-	} else {
-		opts = append(opts, data.SOWithPayload(payload))
-	}
-
-	sgo, err := data.NewSubgroupObject(objectIdDelta, opts...)
-	if err != nil {
-		return nil, parsed, fmt.Errorf("DecodeSubgroupObject: failed to create SubgroupObject: %w", err)
-	}
-
-	return sgo, parsed, nil
 }
 
 // Track Namespace {

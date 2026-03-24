@@ -659,3 +659,111 @@ func TestDecodeMoqtReasonPhrase(t *testing.T) {
 		})
 	}
 }
+
+func TestDecodeSubgroupObject(t *testing.T) {
+	tests := []struct {
+		name               string
+		buf                []byte
+		subgroupHeaderType *data.SubGroupHeaderType
+		expectedSGO        *data.SubgroupObject
+		expectedN          int
+		expectErr          bool
+	}{
+		{
+			name: "Basic object with payload",
+			buf: []byte{
+				0x01, // Object ID Delta
+				0x04, // Payload Length
+				0x0a, 0x0b, 0x0c, 0x0d, // Payload
+			},
+			subgroupHeaderType: internal.Must(data.NewSubGroupHeaderType(uint64(0x10))),
+			expectedSGO: internal.Must(data.NewSubgroupObject(0x01,
+				data.SOWithPayload([]byte{0x0a, 0x0b, 0x0c, 0x0d}),
+			)),
+			expectedN: 6,
+			expectErr: false,
+		},
+		{
+			name: "Object with status (Normal) and extensions",
+			buf: []byte{
+				0x02,             // Object ID Delta
+				0x02, 0x00, 0x01, // Extensions (Len 2, Type 0, Val 1)
+				0x00, // Payload Length (0)
+				0x00, // Status (Normal)
+			},
+			subgroupHeaderType: internal.Must(data.NewSubGroupHeaderType(uint64(0x11))), // ExtensionsPresent = true
+			expectedSGO: internal.Must(data.NewSubgroupObject(0x02,
+				data.SOWithStatus(model.Normal),
+				data.SOWithExtensions([]model.MoqtKeyValuePair{
+					internal.Must(model.NewMoqtKeyValuePair(0, uint64(1))),
+				}),
+			)),
+			expectedN: 6,
+			expectErr: false,
+		},
+		{
+			name: "Non-normal status with extensions, protocol violation",
+			buf: []byte{
+				0x03,             // Object ID Delta
+				0x02, 0x00, 0x01, // Extensions (Len 2, Type 0, Val 1)
+				0x00, // Payload Length (0)
+				0x03, // Status (EndOfGroup)
+			},
+			subgroupHeaderType: internal.Must(data.NewSubGroupHeaderType(uint64(0x11))), // ExtensionsPresent = true
+			expectedSGO:        nil,
+			expectedN:          6,
+			expectErr:          true,
+		},
+		{
+			name: "Object with status (Normal) and no extensions",
+			buf: []byte{
+				0x04, // Object ID Delta
+				0x00, // Payload Length (0)
+				0x00, // Status (Normal)
+			},
+			subgroupHeaderType: internal.Must(data.NewSubGroupHeaderType(uint64(0x10))), // ExtensionsPresent = false
+			expectedSGO: internal.Must(data.NewSubgroupObject(0x04,
+				data.SOWithStatus(model.Normal),
+			)),
+			expectedN: 3,
+			expectErr: false,	
+		},
+		{
+			name: "Non-normal status object in extensions-present subgroup header (ext length must be 0)",
+			buf: []byte{
+				0x05, // Object ID Delta
+				0x00, // Extensions Length (0)
+				0x00, // Payload Length (0)
+				0x03, // Status (EndOfGroup)
+			},
+			subgroupHeaderType: internal.Must(data.NewSubGroupHeaderType(uint64(0x11))), // ExtensionsPresent = true
+			expectedSGO: internal.Must(data.NewSubgroupObject(0x05,
+				data.SOWithStatus(model.EndOfGroup),
+			)),
+			expectedN: 4,
+			expectErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			sgo, n, err := DecodeSubgroupObject(tt.buf, tt.subgroupHeaderType)
+
+			if tt.expectErr {
+				if err == nil {
+					t.Errorf("DecodeSubgroupObject() expected an error, but got none")
+				}
+			} else {
+				if err != nil {
+					t.Errorf("DecodeSubgroupObject() unexpected error: %v", err)
+				}
+				if !reflect.DeepEqual(sgo, tt.expectedSGO) {
+					t.Errorf("DecodeSubgroupObject() got = %+v, want %+v", sgo, tt.expectedSGO)
+				}
+				if n != tt.expectedN {
+					t.Errorf("DecodeSubgroupObject() got parsed bytes = %v, want %v", n, tt.expectedN)
+				}
+			}
+		})
+	}
+}

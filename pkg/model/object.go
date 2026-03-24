@@ -65,3 +65,12 @@ const (
 	EndOfGroup   MoqtObjectStatus = 0x3
 	EndOfTrack   MoqtObjectStatus = 0x4
 )
+
+func (status MoqtObjectStatus) IsValid() bool{
+	switch status {
+	case Normal, DoesNotExist, EndOfGroup, EndOfTrack:
+		return true
+	default:
+		return false
+	}
+}
