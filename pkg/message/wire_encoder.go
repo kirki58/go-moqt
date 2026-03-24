@@ -55,11 +55,13 @@ func EncodeExtensions(b *[]byte, kvPairs []model.MoqtKeyValuePair){
 	//   Extension Headers Length (i),
 	//   Extension headers (..),
 	//}
-
-	*b = quicvarint.Append(*b, uint64(len(kvPairs)))
+	var extBuf []byte
 	for _, kv := range kvPairs {
-		EncodeMoqtKeyValuePair(b, kv)
+		EncodeMoqtKeyValuePair(&extBuf, kv)
 	}
+
+	*b = quicvarint.Append(*b, uint64(len(extBuf)))
+	*b = append(*b, extBuf...)
 }
 
 // OBJECT_DATAGRAM {

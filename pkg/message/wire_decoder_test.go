@@ -227,13 +227,13 @@ func TestDecodeExtensions(t *testing.T) {
 		{
 			name:         "0 Extensions (empty slice)",
 			buf:          []byte{0x00}, // Only length given
-			expectedKVPs: []model.MoqtKeyValuePair{},
+			expectedKVPs: nil,
 			expectedN:    1,
 			expectErr:    false,
 		},
 		{
 			name: "1 Extension",
-			buf:  []byte{0x01, 0x02, 0x0A},
+			buf:  []byte{0x02, 0x02, 0x0A},
 			expectedKVPs: []model.MoqtKeyValuePair{
 				internal.Must(model.NewMoqtKeyValuePair(2, uint64(10))),
 			},
@@ -243,7 +243,7 @@ func TestDecodeExtensions(t *testing.T) {
 		{
 			name: "5 Extensions",
 			buf: []byte{
-				0x05,       // Length of extensions (5)
+				0x0F,       // Length of extensions (15)
 				0x00, 0x01, // KV1: Type 0, Value 1
 				0x01, 0x02, 0x01, 0x02, // KV2: Type 1, Length 2, Value [0x01, 0x02]
 				0x02, 0x03, // KV3: Type 2, Value 3
@@ -261,7 +261,7 @@ func TestDecodeExtensions(t *testing.T) {
 		},
 		{
 			name:         "Incomplete Extensions - Missing KVP",
-			buf:          []byte{0x01, 0x02}, // Length is 1, but only type 2 is provided, missing value
+			buf:          []byte{0x02, 0x02}, // Length is 2, but only type 2 is provided, missing value
 			expectedKVPs: nil,
 			expectedN:    2,
 			expectErr:    true,
@@ -327,7 +327,7 @@ func TestDecodeObjectDatagram(t *testing.T) {
 				0x0C, // Publisher Priority
 
 				// Extensions - Start
-				0x02, // Length of extensions
+				0x06, // Length of extensions
 				// Extension 1
 				0x0A, 0x0B,
 				// Extensions 2
@@ -372,7 +372,7 @@ func TestDecodeObjectDatagram(t *testing.T) {
 				0x0C, // Publisher Priority
 
 				// Extensions - Start
-				0x02, // Length of extensions
+				0x06, // Length of extensions
 				// Extension 1
 				0x0A, 0x0B,
 				// Extensions 2

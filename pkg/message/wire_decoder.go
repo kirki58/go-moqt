@@ -104,7 +104,7 @@ func DecodeMoqtKeyValuePair(b []byte) (model.MoqtKeyValuePair, int, error) {
 //	}
 func DecodeExtensions(b []byte) ([]model.MoqtKeyValuePair, int, error) {
 	parsed := 0
-	kvPairsLen, n, err := quicvarint.Parse(b)
+	extensionsLen, n, err := quicvarint.Parse(b)
 	parsed += n
 
 	if err != nil {
@@ -112,18 +112,28 @@ func DecodeExtensions(b []byte) ([]model.MoqtKeyValuePair, int, error) {
 	}
 	b = b[n:]
 
-	kvPairs := make([]model.MoqtKeyValuePair, kvPairsLen)
-	for i := uint64(0); i < kvPairsLen; i++ {
-		kvp, n, err := DecodeMoqtKeyValuePair(b)
-		parsed += n
-		if err != nil {
-			return nil, parsed, fmt.Errorf("DecodeExtensions: failed to parse Key-Value-Pair %d: %w", i, err)
-		}
-		kvPairs[i] = kvp
-		b = b[n:]
+	if uint64(len(b)) < extensionsLen {
+		return nil, parsed, fmt.Errorf("DecodeExtensions: insufficient bytes for extensions, expected %d, got %d", extensionsLen, len(b))
 	}
-	return kvPairs, parsed, nil
 
+	var kvPairs []model.MoqtKeyValuePair
+	var extBytesParsed uint64
+	for extBytesParsed < extensionsLen {
+		kvp, n, err := DecodeMoqtKeyValuePair(b)
+		if err != nil {
+			return nil, parsed + int(extBytesParsed), fmt.Errorf("DecodeExtensions: failed to parse Key-Value-Pair: %w", err)
+		}
+		kvPairs = append(kvPairs, kvp)
+		b = b[n:]
+		extBytesParsed += uint64(n)
+	}
+
+	if extBytesParsed != extensionsLen {
+		return nil, parsed + int(extBytesParsed), fmt.Errorf("DecodeExtensions: parsed bytes %d does not match Extension Headers Length %d", extBytesParsed, extensionsLen)
+	}
+
+	parsed += int(extBytesParsed)
+	return kvPairs, parsed, nil
 }
 
 func DecodeObjectDatagram(b []byte) (*data.ObjectDatagram, int, error){
@@ -181,6 +191,20 @@ func DecodeObjectDatagram(b []byte) (*data.ObjectDatagram, int, error){
 	// Decode Extensions if present
 	var extensions []model.MoqtKeyValuePair
 	if dtype.ExtensionsPresent {
+		// Protocol Violation check:
+		// "If an endpoint receives a datagram with Extensions Present as "Yes" and a
+		// Extension Headers Length of 0, it MUST close the session with a PROTOCOL_VIOLATION."
+		extLen, _, err := quicvarint.Parse(b)
+		if err != nil {
+			return nil, parsed, fmt.Errorf("DecodeObjectDatagram: failed to peek Extension Headers Length: %w", err)
+		}
+		if extLen == 0 {
+			return nil, parsed, model.MOQT_SESSION_TERMINATION_ERROR{
+				ErrorCode:    model.MOQT_SESSION_TERMINATION_ERROR_CODE_PROTOCOL_VIOLATION,
+				ReasonPhrase: model.NewReasonPhrase("OBJECT_DATAGRAM with Extensions Present MUST NOT have 0 Extension Headers Length"),
+			}
+		}
+
 		ext, n, err := DecodeExtensions(b)
 		parsed += n
 		if err != nil {
@@ -193,6 +217,7 @@ func DecodeObjectDatagram(b []byte) (*data.ObjectDatagram, int, error){
 	}
 
 	// Decode Status or Payload
+	// TODO: Any Object with status Normal can have extension headers. If an endpoint receives extension headers on Objects with status that is not Normal, it MUST close the session with a PROTOCOL_VIOLATION.
 	var status model.MoqtObjectStatus
 	var payload []byte
 	if dtype.StatusOrPayload {
@@ -287,6 +312,81 @@ func DecodeSubgroupHeader(b []byte) (*data.SubGroupHeader, int, error){
 	return sgh, parsed, nil
 }
 
+// Subgroup Object{
+//   Object ID Delta (i),
+//   [Extensions (..),]
+//   Object Payload Length (i),
+//   [Object Status (i),]
+//   [Object Payload (..),]
+// }
+
+func DecodeSubgroupObject(b []byte, extensionsPresent bool) (*data.SubgroupObject, int, error) {
+	parsed := 0
+	objectIdDelta, n, err := quicvarint.Parse(b)
+	parsed += n
+	if err != nil {
+		return nil, parsed, fmt.Errorf("DecodeSubgroupObject: failed to parse Object ID Delta: %w", err)
+	}
+	b = b[n:]
+
+	var extensions []model.MoqtKeyValuePair
+	if extensionsPresent {
+		ext, n, err := DecodeExtensions(b)
+		parsed += n
+		if err != nil {
+			return nil, parsed, fmt.Errorf("DecodeSubgroupObject: failed to parse Extensions: %w", err)
+		}
+		extensions = ext
+		b = b[n:]
+	}
+
+	payloadLen, n, err := quicvarint.Parse(b)
+	parsed += n
+	if err != nil {
+		return nil, parsed, fmt.Errorf("DecodeSubgroupObject: failed to parse Object Payload Length: %w", err)
+	}
+	b = b[n:]
+
+	var status model.MoqtObjectStatus
+	var payload []byte
+	if payloadLen == 0 {
+		// If payload length is zero, Object Status is present
+		s, n, err := quicvarint.Parse(b)
+		parsed += n
+		if err != nil {
+			return nil, parsed, fmt.Errorf("DecodeSubgroupObject: failed to parse Object Status: %w", err)
+		}
+		status = model.MoqtObjectStatus(s)
+		// b = b[n:] // Not strictly needed as we return
+	} else {
+		if uint64(len(b)) < payloadLen {
+			return nil, parsed, fmt.Errorf("DecodeSubgroupObject: insufficient bytes for Payload, expected %d, got %d", payloadLen, len(b))
+		}
+		payload = make([]byte, payloadLen)
+		copy(payload, b[:payloadLen])
+		parsed += int(payloadLen)
+		// b = b[payloadLen:]
+	}
+
+	// Construct SubgroupObject using options for consistency
+	var opts []data.SubgroupObjectOption
+	if extensionsPresent {
+		opts = append(opts, data.SOWithExtensions(extensions))
+	}
+	if payloadLen == 0 {
+		opts = append(opts, data.SOWithStatus(status))
+	} else {
+		opts = append(opts, data.SOWithPayload(payload))
+	}
+
+	sgo, err := data.NewSubgroupObject(objectIdDelta, opts...)
+	if err != nil {
+		return nil, parsed, fmt.Errorf("DecodeSubgroupObject: failed to create SubgroupObject: %w", err)
+	}
+
+	return sgo, parsed, nil
+}
+
 // Track Namespace {
 //   Number of Track Namespace Fields (i),
 //   Track Namespace Field (..) ...
@@ -311,7 +411,7 @@ func DecodeTrackNamespace(b []byte) (model.MoqtTrackNamespace, int, error) {
 
 	// Decode each Track Namespace Field
 	trackNamespaceFields := make([]string, noFields)
-	for i := range noFields {
+	for i := uint64(0); i < noFields; i++ {
 		fieldLen, n, err := quicvarint.Parse(b)
 		parsed += n
 		if err != nil {

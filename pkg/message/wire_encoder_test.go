@@ -128,7 +128,7 @@ func TestEncodeExtensions(t *testing.T) {
 			kvPairs: []model.MoqtKeyValuePair{
 				internal.Must(model.NewMoqtKeyValuePair(2, uint64(10))),
 			},
-			expected: []byte{0x01, 0x02, 0x0A}, // length (1), type(2), value(10)
+			expected: []byte{0x02, 0x02, 0x0A}, // length (2), type(2), value(10)
 		},
 		{
 			name: "5 Extensions",
@@ -140,7 +140,7 @@ func TestEncodeExtensions(t *testing.T) {
 				internal.Must(model.NewMoqtKeyValuePair(4, uint64(5))),
 			},
 			expected: []byte{
-				0x05,       // Length of extensions (5)
+				0x0F,       // Length of extensions (15)
 				0x00, 0x01, // KV1: Type 0, Value 1
 				0x01, 0x02, 0x01, 0x02, // KV2: Type 1, Length 2, Value [0x01, 0x02]
 				0x02, 0x03, // KV3: Type 2, Value 3
@@ -197,7 +197,7 @@ func TestEncodeObjectDatagram(t *testing.T) {
 				0x0C, // Publisher Priority
 
 				// Extensions - Start
-				0x02, // Length of extensions
+				0x06, // Length of extensions
 				// Extension 1
 				0x0A, 0x0B,
 				// Extensions 2
@@ -306,7 +306,7 @@ func TestEncodeSubgroupObject(t *testing.T) {
 			expected: []byte{
 				0x02, // ObjectIdDelta
 				// Extensions start
-				0x01,       // Length of extensions (1)
+				0x02,       // Length of extensions (2)
 				0x00, 0x01, // KV1: Type 0, Value 1
 				// Extensions end
 				0x02,       // PayloadLength
@@ -324,7 +324,7 @@ func TestEncodeSubgroupObject(t *testing.T) {
 			expected: []byte{
 				0x03, // ObjectIdDelta
 				// Extensions start
-				0x01,       // Length of extensions (1)
+				0x02,       // Length of extensions (2)
 				0x00, 0x01, // KV1: Type 0, Value 1
 				// Extensions end
 				0x00, // PayloadLength (0 for status)
