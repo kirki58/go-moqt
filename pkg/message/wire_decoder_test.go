@@ -379,7 +379,7 @@ func TestDecodeObjectDatagram(t *testing.T) {
 				0x15, 0x02, 0x00, 0x01, // Type = 21, Len = 2, Value = [0, 1]
 				// Extensions - End
 
-				0x03, // Status, EndOfGroup = 0x03
+				0x00, // Status, Normal = 0x00
 
 				// Payload field ommited entirely in status object
 			},
@@ -392,9 +392,23 @@ func TestDecodeObjectDatagram(t *testing.T) {
 						internal.Must(model.NewMoqtKeyValuePair(21, []byte{0x00, 0x01})),
 					},
 				),
-				data.WithStatus(model.EndOfGroup),
+				data.WithStatus(model.Normal),
 			)),
 			expectedN: 13,
+		},
+		{
+			name: "Non-normal status with extensions, protocol violation",
+			buf: []byte{
+				0x21, // TypeId status, extensions, priority, object id
+				0x01, // Track Alias
+				0x02, 0x0C, // Location (Group 2, Object 12)
+				0x0C,       // Publisher Priority
+				0x02, 0x00, 0x01, // Extensions (Len 2, Type 0, Val 1)
+				0x03, // Status (EndOfGroup)
+			},
+			expectedDG: nil,
+			expectedN: 8,
+			expectErr: true, // Protocol violation: non-Normal status with extensions
 		},
 	}
 

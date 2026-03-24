@@ -345,7 +345,7 @@ func TestNewObjectDatagram(t *testing.T) {
 				),
 				WithObjectId(2),
 				WithPublisherPriority(12),
-				WithStatus(model.EndOfGroup),
+				WithStatus(model.Normal),
 			},
 			expectErr: false,
 			expected: &ObjectDatagram{
@@ -366,7 +366,7 @@ func TestNewObjectDatagram(t *testing.T) {
 					internal.Must(model.NewMoqtKeyValuePair(2, uint64(1))),
 					internal.Must(model.NewMoqtKeyValuePair(4, uint64(123))),
 				}),
-				Status: gonull.NewNullable(model.EndOfGroup),
+				Status: gonull.NewNullable(model.Normal),
 			},
 		},
 		{

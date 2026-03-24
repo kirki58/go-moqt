@@ -217,7 +217,6 @@ func DecodeObjectDatagram(b []byte) (*data.ObjectDatagram, int, error){
 	}
 
 	// Decode Status or Payload
-	// TODO: Any Object with status Normal can have extension headers. If an endpoint receives extension headers on Objects with status that is not Normal, it MUST close the session with a PROTOCOL_VIOLATION.
 	var status model.MoqtObjectStatus
 	var payload []byte
 	if dtype.StatusOrPayload {
@@ -228,6 +227,13 @@ func DecodeObjectDatagram(b []byte) (*data.ObjectDatagram, int, error){
 		}
 		status = model.MoqtObjectStatus(s)
 		b = b[n:]
+
+		if status != model.Normal && dtype.ExtensionsPresent {
+			return nil, parsed, model.MOQT_SESSION_TERMINATION_ERROR{
+				ErrorCode:    model.MOQT_SESSION_TERMINATION_ERROR_CODE_PROTOCOL_VIOLATION,
+				ReasonPhrase: model.NewReasonPhrase("OBJECT_DATAGRAM with status other than Normal MUST NOT have extension headers"),
+			}
+		}
 
 		dg.Status = gonull.NewNullable(status)
 	} else {
