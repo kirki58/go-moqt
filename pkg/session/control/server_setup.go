@@ -22,6 +22,10 @@ func (ssm *ServerSetupMessage) Type() ControlMessageType {
 	return SERVER_SETUP // Type value of Client setup message in Section 9 table 1
 }
 
+func (ssm *ServerSetupMessage) RequestID() (uint64, bool) {
+	return 0, false
+}
+
 func (ssm *ServerSetupMessage) Encode() ([]byte, error) {
 	payloadBuf := make([]byte, 0)
 	message.EncodeExtensions(&payloadBuf, ssm.Parameters) // EncodeExtensions function already encodes "Number of parameters" or "extensions len" as varint into the buffer

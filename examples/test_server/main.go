@@ -70,7 +70,7 @@ func main() {
 			fmt.Print("Subscribe handler registered for the session\n")
 
 			// Run control loop
-			sess.RunControlLoop()
+			go sess.RunControlLoop()
 		}(conn)
 	}
 }

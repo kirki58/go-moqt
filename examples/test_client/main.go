@@ -37,7 +37,7 @@ func main() {
 	// Send subscribe message
 
 	subMsg := control.SubscribeMessage{
-		RequestId: 0,
+		RequestId: 1,
 		FullTrackName: &model.MoqtFullTrackName{
 			Namespace: model.MoqtTrackNamespace{[]byte("field1"), []byte("field2")}, // existing track
 			Name:      []byte("track"),
@@ -46,15 +46,7 @@ func main() {
 	}
 	sess.Cmf.WriteControlMessage(&subMsg)
 
-	fmt.Print("Written subscribe message to the control stream")
-
-	// Wait for a response from the control stream:
-	msg, err := sess.Cmf.ReadControlMessage()
-	if err != nil {
-		fmt.Printf("Error reading response: %v\n", err)
-	} else {
-		fmt.Printf("Received response from server: %#v\n", msg)
-	}
+	fmt.Print("Written subscribe message (reqId = 1) to the control stream\n")
 
 	subMsg2 := control.SubscribeMessage{
 		RequestId: 0,
@@ -64,15 +56,23 @@ func main() {
 		},
 		Parameters: []model.MoqtKeyValuePair{},
 	}
+
+	// wait for key signal
+	var input string
+	fmt.Print("Hit enter to send a subscribe message with invalid request id (reqId = 0) and non-existent track\n")
+	fmt.Scanln(&input)
+
 	sess.Cmf.WriteControlMessage(&subMsg2)
 
-	// Wait for a response from the control stream:
-	msg, err = sess.Cmf.ReadControlMessage()
-	if err != nil {
-		fmt.Printf("Error reading response: %v\n", err)
-	} else {
-		fmt.Printf("Received response from server: %#v\n", msg)
-	}
+	fmt.Print("Written subscribe message (reqId = 1) to the control stream\n")
+
+	// wait for key signal
+	fmt.Print("Hit enter to send a subscribe message with invalid request id (reqId = 0) and non-existent track\n")
+	fmt.Scanln(&input)
+
+	sess.Cmf.WriteControlMessage(&subMsg2)
+
+	fmt.Print("Written subscribe message (reqId = 1) to the control stream\n")
 
 	// Keep the client alive
 	select {}

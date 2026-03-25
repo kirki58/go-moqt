@@ -25,6 +25,10 @@ func (m *RequestErrorMessage) Type() ControlMessageType {
 	return REQUEST_ERROR
 }
 
+func (m *RequestErrorMessage) RequestID() (uint64, bool) {
+	return 0, false
+}
+
 func (m *RequestErrorMessage) Encode() ([]byte, error) {
 	payloadBuf := make([]byte, 0)
 	payloadBuf = quicvarint.Append(payloadBuf, m.RequestId)

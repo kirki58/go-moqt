@@ -46,10 +46,21 @@ const (
 type ControlMessage interface {
 	Type() ControlMessageType // Returns the type value of the specific control message struct implementing this interface
 
+	RequestID() (uint64, bool) // This is only for request-initiator control messages, it will return their request (id + true) if it's a request initiator control message, otherwise it will return (0, false)
+
 	Encode() ([]byte, error) // Serializes the control message PAYLOAD into the wire, since header type is the same for all control messages, a wrapper should handle it's encoding (for the sake of clean code)
 
 	Decode(payload []byte) (int, error) // Deserializes the control message PAYLOAD from the wire, Populates the ControlMessage with payload, again header deserialization should be handled by a wrapper
 }
+
+// Note: Request-initiators are:
+// SUBSCRIBE
+// FETCH
+// PUBLISH
+// TRACK_STATUS
+// PUBLISH_NAMESPACE
+// SUBSCRIBE_NAMESPACE 
+// SUBSCRIBE_UPDATE
 
 // 1. Why you need bufio
 // For Reading (Critical)

@@ -28,6 +28,10 @@ func (m *SubscribeOkMessage) Type() ControlMessageType {
 	return SUBSCRIBE_OK
 }
 
+func (m *SubscribeOkMessage) RequestID() (uint64, bool) {
+	return 0, false
+}
+
 func (m *SubscribeOkMessage) Encode() ([]byte, error) {
 	payloadBuf := make([]byte, 0)
 	payloadBuf = quicvarint.Append(payloadBuf, m.RequestId)

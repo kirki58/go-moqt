@@ -33,6 +33,10 @@ func (sm *SubscribeMessage) Type() ControlMessageType {
 	return SUBSCRIBE
 }
 
+func (sm *SubscribeMessage) RequestID() (uint64, bool) {
+	return sm.RequestId, true
+}
+
 func (sm *SubscribeMessage) Encode() ([]byte, error) {
 	payloadBuf := make([]byte, 0)
 	// 1. Encode the request id
