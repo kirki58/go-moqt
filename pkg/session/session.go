@@ -154,66 +154,72 @@ func (sess *Session) RunControlLoop() {
 	// Act upon the control message type and contents
 
 	for {
-		cMsg, err := sess.Cmf.ReadControlMessage()
-		if err != nil {
-			if sess.TerminateIfTerminationError(err) {
+		select{
+		case <-sess.Conn.Context().Done(): // The underlying connection got closed
+			fmt.Printf("Session control loop exiting because connection context is done for session with peer %s\n", sess.Conn.RemoteHost())
+			return
+		default:
+			cMsg, err := sess.Cmf.ReadControlMessage()
+			if err != nil {
+				if sess.TerminateIfTerminationError(err) {
+					return
+				}
+				// Non-termination error, just log and continue
+				fmt.Printf("Error reading control message: %v\n", err)
+				continue
+			}
+			fmt.Printf("[DEBUG] Received message from the control stream: %#v\n", cMsg)
+
+			msgType := cMsg.Type()
+
+			// Below listed message types belong to request initiator messages which increment the next expected request id counter for the peer by 2 when received.
+			// Also upon sending one of these messages a peer must increment his own next request id tracker by 2
+
+			// Request ID validity checks for the "RequestID" field they have should be performed in their handler implementation!
+			// A ValidateRequestId function is provided below for this purpose
+			// SUBSCRIBE
+			// FETCH
+			// PUBLISH
+			// TRACK_STATUS
+			// PUBLISH_NAMESPACE
+			// SUBSCRIBE_NAMESPACE 
+			// SUBSCRIBE_UPDATE
+
+			// Perform sequential validation for request-initiating messages
+			// Request Id validation should remain sequential although the handlers are executed concurrently
+			if reqId, isInitiator := cMsg.RequestID(); isInitiator {
+				if err := sess.ValidateAndIncrementIncomingRequestId(reqId); err != nil {
+					if sess.TerminateIfTerminationError(err) {
+						return
+					}
+					continue // Or handle error appropriately
+				}
+			}
+
+			handler, ok := sess.Handlers[msgType] // Check registered handlers for this message type
+			// Note: sess.Handlers doesnt utilize Mutex since it is assumed that all handlers are registered before execution of RunControlLoop goroutine.
+			// After that sess.Handlers is basically read-only by the single RunControlLoop goroutine in the session so we shouldn't have any issues
+			// Thus, It should go without saying that a peer MUST register all needed handlers before running the control loop.
+			if !ok {                                  // Message type is not supported by the peer
+				// INTERNAL_ERROR termination error because the received control message is unsupported
+				err := model.MOQT_SESSION_TERMINATION_ERROR{
+					ErrorCode:    model.MOQT_SESSION_TERMINATION_ERROR_CODE_INTERNAL_ERROR,
+					ReasonPhrase: model.NewReasonPhrase(fmt.Sprintf("No handler for Control Message Type: %#X", cMsg.Type())),
+				}
+				sess.TerminateIfTerminationError(err)
 				return
 			}
-			// Non-termination error, just log and continue
-			fmt.Printf("Error reading control message: %v\n", err)
-			continue
-		}
-		fmt.Printf("[DEBUG] Received message from the control stream: %#v\n", cMsg)
 
-		msgType := cMsg.Type()
-
-		// Below listed message types belong to request initiator messages which increment the next expected request id counter for the peer by 2 when received.
-		// Also upon sending one of these messages a peer must increment his own next request id tracker by 2
-
-		// Request ID validity checks for the "RequestID" field they have should be performed in their handler implementation!
-		// A ValidateRequestId function is provided below for this purpose
-		// SUBSCRIBE
-		// FETCH
-		// PUBLISH
-		// TRACK_STATUS
-		// PUBLISH_NAMESPACE
-		// SUBSCRIBE_NAMESPACE 
-		// SUBSCRIBE_UPDATE
-
-		// Perform sequential validation for request-initiating messages
-		// Request Id validation should remain sequential although the handlers are executed concurrently
-		if reqId, isInitiator := cMsg.RequestID(); isInitiator {
-			if err := sess.ValidateAndIncrementIncomingRequestId(reqId); err != nil {
-				if sess.TerminateIfTerminationError(err) {
-					return
+			go func() {
+				if err := handler.Handle(sess, cMsg); err != nil {
+					if sess.TerminateIfTerminationError(err) {
+						fmt.Printf("Handler caused a session termination error ")
+						return
+					}
+					fmt.Printf("Error from handler for message type %v: %v\n", msgType, err)
 				}
-				continue // Or handle error appropriately
-			}
+			}()
 		}
-
-		handler, ok := sess.Handlers[msgType] // Check registered handlers for this message type
-		// Note: sess.Handlers doesnt utilize Mutex since it is assumed that all handlers are registered before execution of RunControlLoop goroutine.
-		// After that sess.Handlers is basically read-only by the single RunControlLoop goroutine in the session so we shouldn't have any issues
-		// Thus, It should go without saying that a peer MUST register all needed handlers before running the control loop.
-		if !ok {                                  // Message type is not supported by the peer
-			// INTERNAL_ERROR termination error because the received control message is unsupported
-			err := model.MOQT_SESSION_TERMINATION_ERROR{
-				ErrorCode:    model.MOQT_SESSION_TERMINATION_ERROR_CODE_INTERNAL_ERROR,
-				ReasonPhrase: model.NewReasonPhrase(fmt.Sprintf("No handler for Control Message Type: %#X", cMsg.Type())),
-			}
-			sess.TerminateIfTerminationError(err)
-			return
-		}
-
-		go func() {
-			if err := handler.Handle(sess, cMsg); err != nil {
-				if sess.TerminateIfTerminationError(err) {
-					fmt.Printf("Handler caused a session termination error ")
-					return
-				}
-				fmt.Printf("Error from handler for message type %v: %v\n", msgType, err)
-			}
-		}()
 	}
 }
 

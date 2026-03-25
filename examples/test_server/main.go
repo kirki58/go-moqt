@@ -18,9 +18,7 @@ import (
 )
 
 func main() {
-	srv := server.Server{
-		TrackRegistry: moqt.NewSimpleTrackRegistry(),
-	}
+	srv := server.NewServer(moqt.NewSimpleTrackRegistry())
 	srv.TrackRegistry.AddTrack(model.MoqtFullTrackName{
 		Namespace: model.MoqtTrackNamespace{[]byte("field1"), []byte("field2")},
 		Name:      []byte("track"),

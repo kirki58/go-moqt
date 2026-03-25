@@ -10,6 +10,7 @@ import (
 	"go-moq/pkg/session/control"
 	"go-moq/pkg/transport"
 	moqtquic "go-moq/pkg/transport/quic"
+	"net"
 	"net/url"
 	"time"
 
@@ -23,6 +24,16 @@ const connMaxIdleTimeout = 60 * time.Second // terminate after 60 seconds of idl
 
 type Server struct {
 	TrackRegistry moqt.TrackRegistry
+	Addr          string        // Read-only for external code
+	Port          int           // Read-only for external code
+	Ready         chan struct{} // This channel will be closed when the server is ready to accept connections
+}
+
+func NewServer(trackRegistry moqt.TrackRegistry) *Server {
+	return &Server{
+		TrackRegistry: trackRegistry,
+		Ready:         make(chan struct{}),
+	}
 }
 
 // Starts a while-true loop that accepts connections, sends accepted connection over the channel to get handled by the caller
@@ -45,14 +56,14 @@ func (s *Server) Run(ctx context.Context, uri string, certFile string, keyFile s
 			NextProtos:   []string{"moqt-15"},
 		}
 		quicConf := &quic.Config{
-			EnableDatagrams:       true,
-			MaxIncomingStreams:    1,
-			MaxIdleTimeout: connMaxIdleTimeout,
+			EnableDatagrams:    true,
+			MaxIncomingStreams: 1,
+			MaxIdleTimeout:     connMaxIdleTimeout,
 		}
 
 		addr := u.Host
 		if u.Port() == "" {
-			addr = u.Host + ":443"
+			addr = u.Host + ":0"
 		}
 
 		listener, err := quic.ListenAddr(addr, tlsConf, quicConf)
@@ -62,7 +73,10 @@ func (s *Server) Run(ctx context.Context, uri string, certFile string, keyFile s
 			return fmt.Errorf("failed to listen on %s: %w", addr, err)
 		}
 
-		fmt.Printf("[INFO] Listening for QUIC on %s\n", addr)
+		s.Addr = listener.Addr().String()
+		s.Port = listener.Addr().(*net.UDPAddr).Port
+		close(s.Ready)
+		fmt.Printf("[INFO] Listening for QUIC on %s\n", s.Addr)
 
 		for {
 			qConn, err := listener.Accept(ctx)
@@ -115,8 +129,7 @@ func (s *Server) InitateSession(ctx context.Context, conn transport.MOQTConnecti
 		Conn:          conn,
 		ControlStream: stream,
 		Cmf:           control.NewControlMessageFactory(stream),
-		Handlers: make(map[control.ControlMessageType]session.Handler),
-		
+		Handlers:      make(map[control.ControlMessageType]session.Handler),
 	}
 
 	err = s.performHandshake(ctx, sess, setupParams)
