@@ -3,9 +3,8 @@ package integration_test
 import (
 	"context"
 	"fmt"
-	"go-moq/client"
-	"go-moq/internal"
 	"go-moq/pkg/model"
+	"go-moq/pkg/session"
 	"go-moq/pkg/session/control"
 	"go-moq/server"
 	"testing"
@@ -18,14 +17,14 @@ var maxIncomingReqIdClient uint64 = 100
 
 func Test_Integration(t *testing.T) {
 	defer goleak.VerifyNone(t)
-	
+
 	srv := server.NewServer(nil)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	// It shouldn't take more than 5 seconds for the server to establish a Listener and bind to a port
-	
-	go RunServerOverQUIC(ctx, srv, "moqt://localhost") // Port will be assigned by OS if we don't specify it, we can be aware of the value in srv.Addr or srv.Port
+
+	go runServerOverQUIC(ctx, srv, "moqt://localhost") // Port will be assigned by OS if we don't specify it, we can be aware of the value in srv.Addr or srv.Port
 
 	select {
 	case <-srv.Ready:
@@ -36,47 +35,15 @@ func Test_Integration(t *testing.T) {
 
 	// Test Case 1: Handshake
 	t.Run("Client/Connection_Establishment_And_Handshake_Success", func(t *testing.T) {
-		// Spin up a client
-		client := client.Client{}
-		bkgCtx := context.Background()
-		dialCtx, dialCancel := context.WithTimeout(bkgCtx, 5*time.Second)
-		defer dialCancel()
 
-		conn, err := client.Connect(dialCtx, fmt.Sprintf("moqt://localhost:%d", srv.Port))
+		var sess *session.Session = setupSession(t, srv)
 
-		// ASSERTION 1: Should successfully connect in the provided happy path
-		if err != nil {
-			t.Fatalf("Client Failed to connect to MoQT server at %s: %v", srv.Addr, err)
-		}
+		// Test Case 2: TerminateIfTerminationError
 
-		// Client initiates an handshake
-		sessInitCtx, sessInitCancel := context.WithTimeout(bkgCtx, 20 *time.Second) // Ping frames are sent every 15 seconds, so 20 sec max for session init is ideal
-		defer sessInitCancel()
-
-		sess, err := client.InitiateSession(sessInitCtx, conn, []model.MoqtKeyValuePair{ // this is the client's view of the session
-			internal.Must(model.NewMoqtKeyValuePair(control.SetupParamMaxRequestID, maxIncomingReqIdClient)),
-		})
-
-		// Assertion 2: Should successfully complete the handshake
-		if err != nil {
-			t.Fatalf("Client failed to initiate session: %v", err)
-		}
-
-		if sess == nil {
-			t.Fatal("Session is nil after successful initiation")
-		}
-
-		// Assertion 3: Verify session state
-		if sess.State.MaxOutgoingRequestID != 100 {
-			t.Errorf("Expected MaxOutgoingRequestId %d, got %d", maxIncomingReqIdClient, sess.State.MaxOutgoingRequestID)
-		}
-
-		// Test Case 2: TerminateIfTerianiotnError
-
-		t.Run("TerminateIfTerminationError_Terminates_Wrapped_Error", func(t *testing.T) {
+		t.Run("TerminateIfTerminationError_Wrapped_Error_Terminates", func(t *testing.T) {
 			terminationError := model.MOQT_SESSION_TERMINATION_ERROR{
 				ReasonPhrase: "Test termination",
-				ErrorCode: model.MOQT_SESSION_TERMINATION_ERROR_CODE_PROTOCOL_VIOLATION,
+				ErrorCode:    model.MOQT_SESSION_TERMINATION_ERROR_CODE_PROTOCOL_VIOLATION,
 			}
 			sess.TerminateIfTerminationError(fmt.Errorf("Wrapped error with internal session termination error: %w", &terminationError))
 
@@ -88,7 +55,24 @@ func Test_Integration(t *testing.T) {
 			case <-time.After(2 * time.Second):
 				t.Error("Session connection context was not closed after termination error")
 			}
-			
+		})
+
+		// Test Case 3: Client is unable to write on terminated connection's control stream
+		t.Run("Client_ReadControlMessage_Terminated_Session_Fails", func(t *testing.T) {
+			// Client tries to send control message
+			cMsg := control.SubscribeMessage{
+				RequestId: 1,
+				FullTrackName: &model.MoqtFullTrackName{
+					Namespace: [][]byte{[]byte("test")},
+					Name: []byte("track"),
+				},
+				Parameters: []model.MoqtKeyValuePair{},
+			}
+			err := sess.Cmf.WriteControlMessage(&cMsg)
+			fmt.Printf("Sucessfully received error after trying to write to terminated control stream %v\n", err)
+			if err == nil {
+				t.Error("Expected error when writing to a terminated session's control stream, but got nil")
+			}
 		})
 	})
 
