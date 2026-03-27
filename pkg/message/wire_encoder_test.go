@@ -461,3 +461,57 @@ func TestEncodeMoqtReasonPhrase(t *testing.T) {
 		})
 	}
 }
+
+func TestEncodeSubscriptionFilter(t *testing.T) {
+	tests := []struct {
+		name     string
+		filter   *data.SubscriptionFilter
+		expected []byte
+	}{
+		{
+			name: "NextGroupStart Filter",
+			filter: data.NewNextGroupStartFilter(model.MoqtLocation{GroupId: 0x0, ObjectId: 0x0}),
+			expected: []byte{
+				0x1, // Filter type
+				// start location not encoded (determined by publisher)
+				// endgroup not encoded
+			},
+		},
+		{
+			name: "LargestObject Filter",
+			filter: data.NewLargestObjectFilter(model.MoqtLocation{GroupId: 0x0, ObjectId: 0x0}),
+			expected: []byte{
+				0x2,
+				// start location not encoded (determined by publisher)
+				// endgroup not encoded
+			},
+		},
+		{
+			name: "AbsoluteStart Filter",
+			filter: data.NewAbsoluteStartFilter(model.MoqtLocation{GroupId: 0x0, ObjectId: 0x0}),
+			expected: []byte{
+				0x3,
+				0x0, 0x0, // start location actually encoded
+			},
+		},
+		{
+			name: "AbsoluteRange Filter",
+			filter: internal.Must(data.NewAbsoluteRangeFilter(model.MoqtLocation{GroupId: 0x2, ObjectId: 0x0}, 0x5)),
+			expected: []byte{
+				0x4,
+				0x2, 0x0, // start location actually encoded
+				0x5, // endgroup actually encoded
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var buf []byte
+			EncodeSubscriptionFilter(&buf, tt.filter)
+			if !reflect.DeepEqual(buf, tt.expected) {
+				t.Errorf("EncodeSubscriptionFilter() got = %v, want %v", buf, tt.expected)
+			}
+		})
+	}	
+}

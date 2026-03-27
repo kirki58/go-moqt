@@ -207,3 +207,23 @@ func EncodeMoqtReasonPhrase(b* []byte, reasonPhrase model.MoqtReasonPhrase){
 	*b = quicvarint.Append(*b, uint64(len(reasonPhrase)))
 	*b = append(*b, string(reasonPhrase)...)
 }
+
+// Subscription Filter {
+//   Filter Type (i),
+//   [Start Location (Location),]
+//   [End Group (i),]
+// }
+
+func EncodeSubscriptionFilter(b* []byte, subscriptionFilter *data.SubscriptionFilter){
+	*b = quicvarint.Append(*b, uint64(subscriptionFilter.FilterType)) // Encode filter type
+
+	// Only encode start location on the wire for AbsoluteStart ro AbsoluteRange filters
+	if subscriptionFilter.FilterType == data.AbsoluteStart || subscriptionFilter.FilterType == data.AbsoluteRange{
+		EncodeMoqtLocation(b, subscriptionFilter.StartLocation) // Encode start location
+	}
+
+	// Only encode end group with AbsoluteRange filter
+	if subscriptionFilter.FilterType == data.AbsoluteRange{
+		*b = quicvarint.Append(*b, subscriptionFilter.EndGroup.Val)
+	}
+}

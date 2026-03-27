@@ -767,3 +767,56 @@ func TestDecodeSubgroupObject(t *testing.T) {
 		})
 	}
 }
+
+func TestDecodeSubscriptionFilter(t *testing.T){
+	// TODO: add decode tests for AbsoluteStart and AbsoluteRange too later
+	tests := []struct {
+		name           string
+		buf            []byte
+		expectedFilter *data.SubscriptionFilter
+		expectedN      int
+		expectErr      bool
+	}{
+		{
+			name: "NextGroupStart Filter",
+			buf:  []byte{0x01},
+			expectedFilter: &data.SubscriptionFilter{
+				FilterType: data.NextGroupStart,
+			},
+			expectedN: 1,
+			expectErr: false,
+		},
+		{
+			name: "LargestObject Filter",
+			buf:  []byte{0x02},
+			expectedFilter: &data.SubscriptionFilter{
+				FilterType: data.LargestObject,
+			},
+			expectedN: 1,
+			expectErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			filter, n, err := DecodeSubscriptionFilter(tt.buf)
+			
+			if tt.expectErr {
+				if err == nil {
+					t.Errorf("DecodeSubscriptionFilter() expected an error, but got none")
+				}
+			} else {
+				if err != nil {
+					t.Errorf("DecodeSubscriptionFilter() unexpected error: %v", err)
+				}
+				if !reflect.DeepEqual(filter, tt.expectedFilter) {
+					t.Errorf("DecodeSubscriptionFilter() got filter = %v, want %v", filter, tt.expectedFilter)
+				}
+				if n != tt.expectedN {
+					t.Errorf("DecodeSubscriptionFilter() got parsed bytes = %v, want %v", n, tt.expectedN)
+				}
+			}
+		})
+	}
+	
+}

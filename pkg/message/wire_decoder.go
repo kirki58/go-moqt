@@ -541,3 +541,66 @@ func DecodeMoqtReasonPhrase(b []byte) (model.MoqtReasonPhrase, int, error) {
 
 	return model.MoqtReasonPhrase(reasonPhrase), parsed, nil
 }
+
+// Subscription Filter {
+//   Filter Type (i),
+//   [Start Location (Location),]
+//   [End Group (i),]
+// }
+
+func DecodeSubscriptionFilter(b []byte) (*data.SubscriptionFilter, int, error) {
+	parsed := 0
+	fType64, n, err := quicvarint.Parse(b)
+
+	parsed += n
+	if err != nil {
+		return nil, parsed, fmt.Errorf("DecodeSubscriptionFilter: failed to parse Filter Type: %w", err)
+	}
+	b = b[n:]
+	
+	// cast uint64 to subscription filter type (which is uint64 internally)
+	filterType := data.SubscriptionFilterType(fType64)
+	// validate filter type
+	// An endpoint that receives a filter type other than the above MUST close the session with PROTOCOL_VIOLATION. [5.1.2]
+	if !data.IsValidSubscriptionFilterType(filterType) {
+		return nil, parsed, &model.MOQT_SESSION_TERMINATION_ERROR{
+			ErrorCode:    model.MOQT_SESSION_TERMINATION_ERROR_CODE_PROTOCOL_VIOLATION,
+			ReasonPhrase: model.NewReasonPhrase(fmt.Sprintf("Invalid Subscription Filter Type: %d", filterType)),
+		}
+	}
+
+	subFilter := &data.SubscriptionFilter{
+		FilterType: filterType,
+	}
+
+	// Read StartLocation for AbsoluteStart and AbsoluteRange filters
+	if filterType == data.AbsoluteStart || filterType == data.AbsoluteRange {
+		startLoc, n, err := DecodeMoqtLocation(b)
+		parsed += n
+		if err != nil {
+			return nil, parsed, fmt.Errorf("DecodeSubscriptionFilter: failed to parse Start Location: %w", err)
+		}
+		subFilter.StartLocation = startLoc
+		b = b[n:]
+	}
+
+	// Read EndGroup for AbsoluteRange filters
+	if filterType == data.AbsoluteRange{
+		endGroup, n, err := quicvarint.Parse(b)
+		parsed += n
+		if err != nil {
+			return nil, parsed, fmt.Errorf("DecodeSubscriptionFilter: failed to parse End Group: %w", err)
+		}
+
+		if endGroup < subFilter.StartLocation.GroupId{
+			return nil, parsed, model.MOQT_REQUEST_ERROR{
+				ErrorCode: model.MOQT_REQUEST_ERROR_CODE_INVALID_RANGE,
+				ReasonPhrase: model.NewReasonPhrase(fmt.Sprintf("Invalid Subscription Filter Range: End Group %d cannot be smaller than Start Location's Group ID %d", endGroup, subFilter.StartLocation.GroupId)),
+			}
+		}
+		
+		subFilter.EndGroup = gonull.NewNullable(endGroup)
+	}
+
+	return subFilter, parsed, nil
+}
