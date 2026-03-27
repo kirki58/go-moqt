@@ -199,7 +199,7 @@ func DecodeObjectDatagram(b []byte) (*data.ObjectDatagram, int, error){
 			return nil, parsed, fmt.Errorf("DecodeObjectDatagram: failed to peek Extension Headers Length: %w", err)
 		}
 		if extLen == 0 {
-			return nil, parsed, model.MOQT_SESSION_TERMINATION_ERROR{
+			return nil, parsed, &model.MOQT_SESSION_TERMINATION_ERROR{
 				ErrorCode:    model.MOQT_SESSION_TERMINATION_ERROR_CODE_PROTOCOL_VIOLATION,
 				ReasonPhrase: model.NewReasonPhrase("OBJECT_DATAGRAM with Extensions Present MUST NOT have 0 Extension Headers Length"),
 			}
@@ -230,14 +230,14 @@ func DecodeObjectDatagram(b []byte) (*data.ObjectDatagram, int, error){
 
 		if !status.IsValid(){
 			// Protocol violation, status is not in defined range
-			return nil, parsed, model.MOQT_SESSION_TERMINATION_ERROR{
+			return nil, parsed, &model.MOQT_SESSION_TERMINATION_ERROR{
 				ErrorCode:    model.MOQT_SESSION_TERMINATION_ERROR_CODE_PROTOCOL_VIOLATION,
 				ReasonPhrase: model.NewReasonPhrase(fmt.Sprintf("Invalid Object Status: %d", s)),
 			}
 		}
 
 		if status != model.Normal && dtype.ExtensionsPresent {
-			return nil, parsed, model.MOQT_SESSION_TERMINATION_ERROR{
+			return nil, parsed, &model.MOQT_SESSION_TERMINATION_ERROR{
 				ErrorCode:    model.MOQT_SESSION_TERMINATION_ERROR_CODE_PROTOCOL_VIOLATION,
 				ReasonPhrase: model.NewReasonPhrase("OBJECT_DATAGRAM with status other than Normal MUST NOT have extension headers"),
 			}
@@ -384,13 +384,13 @@ func DecodeSubgroupObject(b []byte, subgroupHeaderType *data.SubGroupHeaderType)
 	
 		status := model.MoqtObjectStatus(statusRead)
 		if !status.IsValid() {
-			return nil, parsed, model.MOQT_SESSION_TERMINATION_ERROR{
+			return nil, parsed, &model.MOQT_SESSION_TERMINATION_ERROR{
 				ErrorCode:    model.MOQT_SESSION_TERMINATION_ERROR_CODE_PROTOCOL_VIOLATION,
 				ReasonPhrase: model.NewReasonPhrase(fmt.Sprintf("Invalid Object Status: %d", statusRead)),
 			}
 		}
 		if status != model.Normal && subgroupHeaderType.ExtensionsPresent && len(sgo.Extensions.Val) > 0 {
-			return nil, parsed, model.MOQT_SESSION_TERMINATION_ERROR{
+			return nil, parsed, &model.MOQT_SESSION_TERMINATION_ERROR{
 				ErrorCode:    model.MOQT_SESSION_TERMINATION_ERROR_CODE_PROTOCOL_VIOLATION,
 				ReasonPhrase: model.NewReasonPhrase("Subgroup Object with status other than Normal MUST NOT have extension headers"),
 			}
@@ -461,7 +461,7 @@ func DecodeTrackNamespace(b []byte) (model.MoqtTrackNamespace, int, error) {
 	if tn := model.MoqtTrackNamespace(trackNamespace); tn.IsValid(){
 		return tn, parsed, nil
 	} else {
-		return model.MoqtTrackNamespace{}, parsed, model.MOQT_SESSION_TERMINATION_ERROR{
+		return model.MoqtTrackNamespace{}, parsed, &model.MOQT_SESSION_TERMINATION_ERROR{
 			ErrorCode:    model.MOQT_SESSION_TERMINATION_ERROR_CODE_PROTOCOL_VIOLATION,
 			ReasonPhrase: model.NewReasonPhrase("Decoded Track Namespace is invalid, due to number of fields"),
 		}
@@ -510,7 +510,7 @@ func DecodeMoqtFullTrackName(b []byte) (*model.MoqtFullTrackName, int, error) {
 	if ftn.IsValid() {
 		return &ftn, parsed, nil
 	} else {
-		return nil, parsed, model.MOQT_SESSION_TERMINATION_ERROR{
+		return nil, parsed, &model.MOQT_SESSION_TERMINATION_ERROR{
 			ErrorCode:    model.MOQT_SESSION_TERMINATION_ERROR_CODE_PROTOCOL_VIOLATION,
 			ReasonPhrase: model.NewReasonPhrase("Decoded Full Track Name is invalid"),
 		}

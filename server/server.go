@@ -192,7 +192,7 @@ func (s *Server) performHandshake(ctx context.Context, sess *session.Session, se
 
 	clientSetupMsg, ok := msg.(*control.ClientSetupMessage)
 	if !ok {
-		return model.MOQT_SESSION_TERMINATION_ERROR{
+		return &model.MOQT_SESSION_TERMINATION_ERROR{
 			ErrorCode:    model.MOQT_SESSION_TERMINATION_ERROR_CODE_PROTOCOL_VIOLATION,
 			ReasonPhrase: model.NewReasonPhrase("Expected CLIENT_SETUP message, got something else."),
 		}

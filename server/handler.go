@@ -102,7 +102,7 @@ func (s *Server) HandleSubscribe(sess *session.Session, msg control.ControlMessa
 	if sMsg.RequestId == 0{
 		fmt.Printf("Received invalid request id 0, terminating session\n")
 		// termination error test
-		err := model.MOQT_SESSION_TERMINATION_ERROR{
+		err := &model.MOQT_SESSION_TERMINATION_ERROR{
 			ErrorCode:    model.MOQT_SESSION_TERMINATION_ERROR_CODE_PROTOCOL_VIOLATION,
 			ReasonPhrase: model.NewReasonPhrase("Request ID 0 is invalid for client-initiated requests"),
 		}

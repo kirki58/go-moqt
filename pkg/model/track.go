@@ -40,7 +40,7 @@ func StringToMoqtFullTrackName(str string) (MoqtFullTrackName, error) {
 
 	// "+1"s account for the additional name to fields
 	if len(parts) < minFieldsInNamespace+1 || len(parts) > maxFieldsInNamespace+1 {
-		return MoqtFullTrackName{}, MOQT_SESSION_TERMINATION_ERROR{
+		return MoqtFullTrackName{}, &MOQT_SESSION_TERMINATION_ERROR{
 			// If an endpoint receives a Track Namespace consisting of 0 or greater than 32 Track Namespace Fields, it MUST close the session with a PROTOCOL_VIOLATION.
 			// Cite 2.4.1
 			ErrorCode:    MOQT_SESSION_TERMINATION_ERROR_CODE_PROTOCOL_VIOLATION,
@@ -58,7 +58,7 @@ func StringToMoqtFullTrackName(str string) (MoqtFullTrackName, error) {
 	for i, field := range fields {
 		ftnLen += len(field)
 		if ftnLen > maxBytesInFullTrackName {
-			return MoqtFullTrackName{}, MOQT_SESSION_TERMINATION_ERROR{
+			return MoqtFullTrackName{}, &MOQT_SESSION_TERMINATION_ERROR{
 				// The maximum total length of a Full Track Name is 4,096 bytes.
 				// If an endpoint receives a Full Track Name exceeding this length, it MUST close the session with a PROTOCOL_VIOLATION.
 				// Cite 2.4.1

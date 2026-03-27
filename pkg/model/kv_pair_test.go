@@ -66,7 +66,7 @@ func TestNewMoqtKeyValuePair(t *testing.T) {
 				if err == nil {
 					t.Errorf("NewMoqtKeyValuePair() expected error, got nil")
 				}
-				moqtErr, ok := err.(MOQT_SESSION_TERMINATION_ERROR)
+				moqtErr, ok := err.(*MOQT_SESSION_TERMINATION_ERROR)
 				if !ok {
 					t.Errorf("NewMoqtKeyValuePair() expected MOQT_SESSION_TERMINATION_ERROR, got %T", err)
 				} else if moqtErr.ErrorCode != tt.errCode {

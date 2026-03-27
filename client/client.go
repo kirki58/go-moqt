@@ -163,7 +163,7 @@ func (c *Client) performHandshake(ctx context.Context, sess *session.Session, se
 
 	serverSetupMsg, ok := msg.(*control.ServerSetupMessage)
 	if !ok {
-		return model.MOQT_SESSION_TERMINATION_ERROR{
+		return &model.MOQT_SESSION_TERMINATION_ERROR{
 			ErrorCode:    model.MOQT_SESSION_TERMINATION_ERROR_CODE_PROTOCOL_VIOLATION,
 			ReasonPhrase: model.NewReasonPhrase("Expected SERVER_SETUP message after sending CLIENT_SETUP, got something else."),
 		}
@@ -173,13 +173,13 @@ func (c *Client) performHandshake(ctx context.Context, sess *session.Session, se
 	for _, param := range serverSetupMsg.Parameters {
 		// TODO: Implement MALFORMED_PATH and MALFORMED_AUTHORITY errors later.
 		if param.Type == control.SetupParamPath {
-			return model.MOQT_SESSION_TERMINATION_ERROR{
+			return &model.MOQT_SESSION_TERMINATION_ERROR{
 				ErrorCode:    model.MOQT_SESSION_TERMINATION_ERROR_CODE_INVALID_PATH,
 				ReasonPhrase: model.NewReasonPhrase("SERVER_SETUP message MUST NOT include Path parameter."),
 			}
 
 		} else if param.Type == control.SetupParamAuthority {
-			return model.MOQT_SESSION_TERMINATION_ERROR{
+			return &model.MOQT_SESSION_TERMINATION_ERROR{
 				ErrorCode:    model.MOQT_SESSION_TERMINATION_ERROR_CODE_INVALID_AUTHORITY,
 				ReasonPhrase: model.NewReasonPhrase("SERVER_SETUP message MUST NOT include Authority parameter."),
 			}

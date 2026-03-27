@@ -143,7 +143,7 @@ func (cmf *ControlMessageFactory) ReadControlMessage() (ControlMessage, error) {
 
 	// TODO: More control messages as we go
 	default:
-		return nil, model.MOQT_SESSION_TERMINATION_ERROR{
+		return nil, &model.MOQT_SESSION_TERMINATION_ERROR{
 			ErrorCode:    model.MOQT_SESSION_TERMINATION_ERROR_CODE_PROTOCOL_VIOLATION,
 			ReasonPhrase: model.NewReasonPhrase(fmt.Sprintf("Unknown Control Message Type: %#X", msgType)),
 		}
@@ -158,7 +158,7 @@ func (cmf *ControlMessageFactory) ReadControlMessage() (ControlMessage, error) {
 		return nil, fmt.Errorf("ControlMessageFactory.ReadControlMessage():\n\t Decoding control message payload failed:\n\t %w", err)
 	}
 	if decodedBytes != int(msgLength) {
-		return nil, model.MOQT_SESSION_TERMINATION_ERROR{
+		return nil, &model.MOQT_SESSION_TERMINATION_ERROR{
 			ErrorCode:    model.MOQT_SESSION_TERMINATION_ERROR_CODE_PROTOCOL_VIOLATION,
 			ReasonPhrase: model.NewReasonPhrase(fmt.Sprintf("Control Message payload length mismatch. Expected: %d, Got: %d", msgLength, decodedBytes)),
 		}

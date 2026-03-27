@@ -202,7 +202,7 @@ func (sess *Session) RunControlLoop() {
 			// Thus, It should go without saying that a peer MUST register all needed handlers before running the control loop.
 			if !ok {                                  // Message type is not supported by the peer
 				// INTERNAL_ERROR termination error because the received control message is unsupported
-				err := model.MOQT_SESSION_TERMINATION_ERROR{
+				err := &model.MOQT_SESSION_TERMINATION_ERROR{
 					ErrorCode:    model.MOQT_SESSION_TERMINATION_ERROR_CODE_INTERNAL_ERROR,
 					ReasonPhrase: model.NewReasonPhrase(fmt.Sprintf("No handler for Control Message Type: %#X", cMsg.Type())),
 				}
@@ -234,7 +234,7 @@ func (sess *Session) ValidateAndIncrementIncomingRequestId(reqId uint64) error {
 	// if we are the client we expect odd request ids from the server
 
 	if reqId != sess.State.NextIncomingRequestID{
-		return model.MOQT_SESSION_TERMINATION_ERROR{
+		return &model.MOQT_SESSION_TERMINATION_ERROR{
 			ErrorCode:    model.MOQT_SESSION_TERMINATION_ERROR_CODE_INVALID_REQUEST_ID,
 			ReasonPhrase: model.NewReasonPhrase(fmt.Sprintf("Request ID %d does not match expected NextIncomingRequestID %d", reqId, sess.State.NextIncomingRequestID)),
 		}
@@ -242,7 +242,7 @@ func (sess *Session) ValidateAndIncrementIncomingRequestId(reqId uint64) error {
 
 	// Check if the received reqId exceeds the determined max request id for peers self.
 	if reqId >= sess.State.MaxIncomingRequestID {
-		return model.MOQT_SESSION_TERMINATION_ERROR{
+		return &model.MOQT_SESSION_TERMINATION_ERROR{
 			ErrorCode:    model.MOQT_SESSION_TERMINATION_ERROR_CODE_TOO_MANY_REQUESTS,
 			ReasonPhrase: model.NewReasonPhrase(fmt.Sprintf("Request ID %d exceeds MaxIncomingRequestID %d", reqId, sess.State.MaxIncomingRequestID)),
 		}

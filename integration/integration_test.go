@@ -74,7 +74,7 @@ func Test_Integration(t *testing.T) {
 				ReasonPhrase: "Test termination",
 				ErrorCode: model.MOQT_SESSION_TERMINATION_ERROR_CODE_PROTOCOL_VIOLATION,
 			}
-			sess.TerminateIfTerminationError(&terminationError)
+			sess.TerminateIfTerminationError(fmt.Errorf("Wrapped error with internal session termination error: %w", &terminationError))
 
 			// Assertion 1
 			// sess.Conn.Context() should be closed

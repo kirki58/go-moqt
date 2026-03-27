@@ -39,7 +39,7 @@ func NewMoqtKeyValuePair(typeID uint64, value any) (MoqtKeyValuePair, error) {
 	switch t := value.(type) {
 	case []byte:
 		if typeID%2 == 0 {
-			return MoqtKeyValuePair{}, MOQT_SESSION_TERMINATION_ERROR{
+			return MoqtKeyValuePair{}, &MOQT_SESSION_TERMINATION_ERROR{
 				ErrorCode:    MOQT_SESSION_TERMINATION_ERROR_CODE_KEY_VALUE_FORMATTING_ERROR,
 				ReasonPhrase: NewReasonPhrase("For even Type IDs, Value must be of type uint64"),
 			}
@@ -47,7 +47,7 @@ func NewMoqtKeyValuePair(typeID uint64, value any) (MoqtKeyValuePair, error) {
 
 		len := len(t)
 		if len > maxMoqtKeyValuePairValueLength {
-			return MoqtKeyValuePair{}, MOQT_SESSION_TERMINATION_ERROR{
+			return MoqtKeyValuePair{}, &MOQT_SESSION_TERMINATION_ERROR{
 				ErrorCode:    MOQT_SESSION_TERMINATION_ERROR_CODE_PROTOCOL_VIOLATION,
 				ReasonPhrase: NewReasonPhrase("Value length must not exceed 65535 bytes when it is []byte"),
 			}
@@ -61,7 +61,7 @@ func NewMoqtKeyValuePair(typeID uint64, value any) (MoqtKeyValuePair, error) {
 
 	case uint64:
 		if typeID%2 == 1 {
-			return MoqtKeyValuePair{}, MOQT_SESSION_TERMINATION_ERROR{
+			return MoqtKeyValuePair{}, &MOQT_SESSION_TERMINATION_ERROR{
 				ErrorCode: MOQT_SESSION_TERMINATION_ERROR_CODE_KEY_VALUE_FORMATTING_ERROR,
 				ReasonPhrase: NewReasonPhrase("For odd Type IDs, Value must be of type []byte"),
 			}
@@ -74,7 +74,7 @@ func NewMoqtKeyValuePair(typeID uint64, value any) (MoqtKeyValuePair, error) {
 		}, nil
 
 	default:
-		return MoqtKeyValuePair{}, MOQT_SESSION_TERMINATION_ERROR{
+		return MoqtKeyValuePair{}, &MOQT_SESSION_TERMINATION_ERROR{
 			ErrorCode: MOQT_SESSION_TERMINATION_ERROR_CODE_KEY_VALUE_FORMATTING_ERROR,
 			ReasonPhrase: NewReasonPhrase(fmt.Sprintf("Value must be of type []byte or uint64, got %T", t)),
 		}

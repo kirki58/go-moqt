@@ -24,7 +24,7 @@ type MOQT_SESSION_TERMINATION_ERROR struct {
 	ReasonPhrase MoqtReasonPhrase
 }
 
-func (e MOQT_SESSION_TERMINATION_ERROR) Error() string {
+func (e *MOQT_SESSION_TERMINATION_ERROR) Error() string {
 	return fmt.Sprintf("MOQT Session Termination Error - Code: %#X, Reason: %s", e.ErrorCode, e.ReasonPhrase)
 }
 
