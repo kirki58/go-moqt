@@ -5,6 +5,7 @@ go 1.24.9
 require (
 	github.com/LukaGiorgadze/gonull/v2 v2.1.0
 	github.com/quic-go/quic-go v0.56.0
+	go.uber.org/goleak v1.3.0
 )
 
 require (

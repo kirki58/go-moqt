@@ -10,11 +10,15 @@ import (
 	"go-moq/server"
 	"testing"
 	"time"
+
+	"go.uber.org/goleak"
 )
 
 var maxIncomingReqIdClient uint64 = 100
 
 func Test_Integration(t *testing.T) {
+	defer goleak.VerifyNone(t)
+	
 	srv := server.NewServer(nil)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -31,7 +35,7 @@ func Test_Integration(t *testing.T) {
 	}
 
 	// Test Case 1: Handshake
-	t.Run("Client/Initiate_Success", func(t *testing.T) {
+	t.Run("Client/Connection_Establishment_And_Handshake_Success", func(t *testing.T) {
 		// Spin up a client
 		client := client.Client{}
 		bkgCtx := context.Background()
@@ -67,9 +71,9 @@ func Test_Integration(t *testing.T) {
 			t.Errorf("Expected MaxOutgoingRequestId %d, got %d", maxIncomingReqIdClient, sess.State.MaxOutgoingRequestID)
 		}
 
-		// Test Case 2
+		// Test Case 2: TerminateIfTerianiotnError
 
-		t.Run("TerminateIfTerminationError_Sucess", func(t *testing.T) {
+		t.Run("TerminateIfTerminationError_Terminates_Wrapped_Error", func(t *testing.T) {
 			terminationError := model.MOQT_SESSION_TERMINATION_ERROR{
 				ReasonPhrase: "Test termination",
 				ErrorCode: model.MOQT_SESSION_TERMINATION_ERROR_CODE_PROTOCOL_VIOLATION,

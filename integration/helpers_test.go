@@ -47,6 +47,7 @@ func RunServerOverQUIC(ctx context.Context, srv *server.Server, addr string){
 			}
 			fmt.Printf("Session initiated with %s\n", sess.Conn.RemoteHost())
 
+			// Control loop and data loop needs to inherently respect sess.Conn.Context
 			// Run control loop
 			go sess.RunControlLoop()
 			// Run data loop
