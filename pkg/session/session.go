@@ -1,11 +1,9 @@
 package session
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"go-moq/pkg/data"
-	"go-moq/pkg/message"
 	"go-moq/pkg/model"
 	"go-moq/pkg/session/control"
 	"go-moq/pkg/transport"
@@ -127,6 +125,8 @@ type Session struct {
 	State *SessionState
 	
 	Handlers map[control.ControlMessageType]Handler
+
+	Publisher *data.Publisher
 }
 
 // Checks for given error (unwraps wrapped errors sequentially with errors.As()), if it's a type of termination error it will terminate the session and the underlying transport
@@ -254,25 +254,25 @@ func (sess *Session) ValidateAndIncrementIncomingRequestId(reqId uint64) error {
 	return nil
 }
 
-func (sess *Session) SendObjectDatagram(obj *data.ObjectDatagram) error {
-	dgBuf := make([]byte, 0, 256) // Initial capacity of 256 bytes
+// func (sess *Session) SendObjectDatagram(obj *data.ObjectDatagram) error {
+// 	dgBuf := make([]byte, 0, 256) // Initial capacity of 256 bytes
 
-	message.EncodeObjectDatagram(&dgBuf, obj)
+// 	message.EncodeObjectDatagram(&dgBuf, obj)
 
-	return sess.Conn.SendDatagram(dgBuf)
-}
+// 	return sess.Conn.SendDatagram(dgBuf)
+// }
 
-func (sess *Session) ReceiveObjectDatagram(ctx context.Context) (*data.ObjectDatagram, error) {
-	msgBytes, err := sess.Conn.ReceiveDatagram(ctx)
-	if err != nil {
-		return nil, err
-	}
+// func (sess *Session) ReceiveObjectDatagram(ctx context.Context) (*data.ObjectDatagram, error) {
+// 	msgBytes, err := sess.Conn.ReceiveDatagram(ctx)
+// 	if err != nil {
+// 		return nil, err
+// 	}
 
-	objDg, _, err := message.DecodeObjectDatagram(msgBytes)
+// 	objDg, _, err := message.DecodeObjectDatagram(msgBytes)
 
-	if err != nil {
-		return nil, err
-	}
+// 	if err != nil {
+// 		return nil, err
+// 	}
 
-	return objDg, nil
-}
+// 	return objDg, nil
+// }
