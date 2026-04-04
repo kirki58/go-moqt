@@ -4,7 +4,6 @@ package message
 
 import (
 	"fmt"
-	"go-moq/pkg/data"
 	"go-moq/pkg/model"
 
 	"github.com/LukaGiorgadze/gonull/v2"
@@ -136,7 +135,7 @@ func DecodeExtensions(b []byte) ([]model.MoqtKeyValuePair, int, error) {
 	return kvPairs, parsed, nil
 }
 
-func DecodeObjectDatagram(b []byte) (*data.ObjectDatagram, int, error){
+func DecodeObjectDatagram(b []byte) (*model.ObjectDatagram, int, error) {
 	parsed := 0
 	typId, n, err := quicvarint.Parse(b)
 	parsed += n
@@ -147,7 +146,7 @@ func DecodeObjectDatagram(b []byte) (*data.ObjectDatagram, int, error){
 	b = b[n:]
 
 	// Create ObjectDatagramType from the parsed TypeID
-	dtype, err := data.NewObjectDatagramType(typId)
+	dtype, err := model.NewObjectDatagramType(typId)
 	if err != nil {
 		return nil, parsed, fmt.Errorf("DecodeObjectDatagram: invalid Type ID %d: %w", typId, err)
 	}
@@ -169,7 +168,7 @@ func DecodeObjectDatagram(b []byte) (*data.ObjectDatagram, int, error){
 	b = b[n:]
 
 	// Construct the ObjectDatagram
-	dg := &data.ObjectDatagram{
+	dg := &model.ObjectDatagram{
 		Dtype:      *dtype,
 		TrackAlias: trackAlias,
 		Location:   location,
@@ -212,7 +211,7 @@ func DecodeObjectDatagram(b []byte) (*data.ObjectDatagram, int, error){
 		}
 		extensions = ext
 		b = b[n:]
-		
+
 		dg.Extensions = gonull.NewNullable(extensions)
 	}
 
@@ -228,7 +227,7 @@ func DecodeObjectDatagram(b []byte) (*data.ObjectDatagram, int, error){
 		status = model.MoqtObjectStatus(s)
 		b = b[n:]
 
-		if !status.IsValid(){
+		if !status.IsValid() {
 			// Protocol violation, status is not in defined range
 			return nil, parsed, &model.MOQT_SESSION_TERMINATION_ERROR{
 				ErrorCode:    model.MOQT_SESSION_TERMINATION_ERROR_CODE_PROTOCOL_VIOLATION,
@@ -254,7 +253,7 @@ func DecodeObjectDatagram(b []byte) (*data.ObjectDatagram, int, error){
 		dg.Payload = gonull.NewNullable(payload)
 	}
 
-	return dg, parsed, nil	
+	return dg, parsed, nil
 }
 
 // SUBGROUP_HEADER {
@@ -265,7 +264,7 @@ func DecodeObjectDatagram(b []byte) (*data.ObjectDatagram, int, error){
 //   [Publisher Priority (8),]
 // }
 
-func DecodeSubgroupHeader(b []byte) (*data.SubGroupHeader, int, error){
+func DecodeSubgroupHeader(b []byte) (*model.SubGroupHeader, int, error) {
 	parsed := 0
 	typId, n, err := quicvarint.Parse(b)
 	parsed += n
@@ -274,7 +273,7 @@ func DecodeSubgroupHeader(b []byte) (*data.SubGroupHeader, int, error){
 	}
 	b = b[n:]
 
-	sgType, err := data.NewSubGroupHeaderType(typId)
+	sgType, err := model.NewSubGroupHeaderType(typId)
 	if err != nil {
 		return nil, parsed, fmt.Errorf("DecodeSubgroupHeader: invalid Type ID %d: %w", typId, err)
 	}
@@ -295,14 +294,14 @@ func DecodeSubgroupHeader(b []byte) (*data.SubGroupHeader, int, error){
 	}
 	b = b[n:]
 
-	sgh := &data.SubGroupHeader{
+	sgh := &model.SubGroupHeader{
 		SGType:     *sgType,
 		TrackAlias: trackAlias,
 		GroupId:    groupId,
 	}
 
 	// Decode Subgroup ID if present
-	if sgType.SGIDMode == data.SubgroupIdModePresent {
+	if sgType.SGIDMode == model.SubgroupIdModePresent {
 		subgroupId, n, err := quicvarint.Parse(b)
 		parsed += n
 		if err != nil {
@@ -337,7 +336,7 @@ func DecodeSubgroupHeader(b []byte) (*data.SubGroupHeader, int, error){
 // Important Note:
 // We need more context in order to properly decode subgroup objects, This context is normally given in a subgroup header.
 // Subgroup headers are responsible for starting a subgroup object stream, all objects in that stream should follow it's constraints
-func DecodeSubgroupObject(b []byte, subgroupHeaderType *data.SubGroupHeaderType) (*data.SubgroupObject, int, error) {
+func DecodeSubgroupObject(b []byte, subgroupHeaderType *model.SubGroupHeaderType) (*model.SubgroupObject, int, error) {
 	parsed := 0
 	objectIdDelta, n, err := quicvarint.Parse(b)
 	parsed += n
@@ -346,7 +345,7 @@ func DecodeSubgroupObject(b []byte, subgroupHeaderType *data.SubGroupHeaderType)
 	}
 	b = b[n:]
 
-	sgo := &data.SubgroupObject{
+	sgo := &model.SubgroupObject{
 		ObjectIdDelta: objectIdDelta,
 	}
 
@@ -363,8 +362,8 @@ func DecodeSubgroupObject(b []byte, subgroupHeaderType *data.SubGroupHeaderType)
 		}
 
 		// Note on why we considered 0-length extensions PROTOCOL_VIOLATION with datagrams and yet we don't do that for subgroup objects, The document states that:
-		// For Type values where Extensions Present is No, the Extensions field is never present and all Objects have no extensions. 
-		// When Extensions Present is Yes, the Extensions structure defined in Section 10.2.1.2 is present in all Objects in this subgroup. 
+		// For Type values where Extensions Present is No, the Extensions field is never present and all Objects have no extensions.
+		// When Extensions Present is Yes, the Extensions structure defined in Section 10.2.1.2 is present in all Objects in this subgroup.
 		// Objects with no extensions set Extension Headers Length to 0.
 	}
 
@@ -381,7 +380,7 @@ func DecodeSubgroupObject(b []byte, subgroupHeaderType *data.SubGroupHeaderType)
 		if err != nil {
 			return nil, parsed, fmt.Errorf("DecodeSubgroupObject: failed to parse Object Status: %w", err)
 		}
-	
+
 		status := model.MoqtObjectStatus(statusRead)
 		if !status.IsValid() {
 			return nil, parsed, &model.MOQT_SESSION_TERMINATION_ERROR{
@@ -399,7 +398,7 @@ func DecodeSubgroupObject(b []byte, subgroupHeaderType *data.SubGroupHeaderType)
 		return sgo, parsed, nil
 		// b = b[n:]
 	} else { // we are looking at a payload object
-		if len(b) < int(objPayloadLen){ // rest of the slice should contain the entire payload
+		if len(b) < int(objPayloadLen) { // rest of the slice should contain the entire payload
 			return nil, parsed, fmt.Errorf("DecodeSubgroupObject: insufficient bytes for Object Payload, expected %d, got %d", objPayloadLen, len(b))
 		}
 
@@ -452,13 +451,13 @@ func DecodeTrackNamespace(b []byte) (model.MoqtTrackNamespace, int, error) {
 		parsed += int(fieldLen)
 		b = b[fieldLen:]
 	}
-	
+
 	trackNamespace := make([][]byte, noFields)
 	for i, field := range trackNamespaceFields {
 		trackNamespace[i] = []byte(field)
 	}
-	
-	if tn := model.MoqtTrackNamespace(trackNamespace); tn.IsValid(){
+
+	if tn := model.MoqtTrackNamespace(trackNamespace); tn.IsValid() {
 		return tn, parsed, nil
 	} else {
 		return model.MoqtTrackNamespace{}, parsed, &model.MOQT_SESSION_TERMINATION_ERROR{
@@ -504,7 +503,7 @@ func DecodeMoqtFullTrackName(b []byte) (*model.MoqtFullTrackName, int, error) {
 
 	ftn := model.MoqtFullTrackName{
 		Namespace: trackNamespace,
-		Name: trackName,
+		Name:      trackName,
 	}
 
 	if ftn.IsValid() {
@@ -548,7 +547,7 @@ func DecodeMoqtReasonPhrase(b []byte) (model.MoqtReasonPhrase, int, error) {
 //   [End Group (i),]
 // }
 
-func DecodeSubscriptionFilter(b []byte) (*data.SubscriptionFilter, int, error) {
+func DecodeSubscriptionFilter(b []byte) (*model.SubscriptionFilter, int, error) {
 	parsed := 0
 	fType64, n, err := quicvarint.Parse(b)
 
@@ -557,24 +556,24 @@ func DecodeSubscriptionFilter(b []byte) (*data.SubscriptionFilter, int, error) {
 		return nil, parsed, fmt.Errorf("DecodeSubscriptionFilter: failed to parse Filter Type: %w", err)
 	}
 	b = b[n:]
-	
+
 	// cast uint64 to subscription filter type (which is uint64 internally)
-	filterType := data.SubscriptionFilterType(fType64)
+	filterType := model.SubscriptionFilterType(fType64)
 	// validate filter type
 	// An endpoint that receives a filter type other than the above MUST close the session with PROTOCOL_VIOLATION. [5.1.2]
-	if !data.IsValidSubscriptionFilterType(filterType) {
+	if !model.IsValidSubscriptionFilterType(filterType) {
 		return nil, parsed, &model.MOQT_SESSION_TERMINATION_ERROR{
 			ErrorCode:    model.MOQT_SESSION_TERMINATION_ERROR_CODE_PROTOCOL_VIOLATION,
 			ReasonPhrase: model.NewReasonPhrase(fmt.Sprintf("Invalid Subscription Filter Type: %d", filterType)),
 		}
 	}
 
-	subFilter := &data.SubscriptionFilter{
+	subFilter := &model.SubscriptionFilter{
 		FilterType: filterType,
 	}
 
 	// Read StartLocation for AbsoluteStart and AbsoluteRange filters
-	if filterType == data.AbsoluteStart || filterType == data.AbsoluteRange {
+	if filterType == model.AbsoluteStart || filterType == model.AbsoluteRange {
 		startLoc, n, err := DecodeMoqtLocation(b)
 		parsed += n
 		if err != nil {
@@ -585,20 +584,20 @@ func DecodeSubscriptionFilter(b []byte) (*data.SubscriptionFilter, int, error) {
 	}
 
 	// Read EndGroup for AbsoluteRange filters
-	if filterType == data.AbsoluteRange{
+	if filterType == model.AbsoluteRange {
 		endGroup, n, err := quicvarint.Parse(b)
 		parsed += n
 		if err != nil {
 			return nil, parsed, fmt.Errorf("DecodeSubscriptionFilter: failed to parse End Group: %w", err)
 		}
 
-		if endGroup < subFilter.StartLocation.GroupId{
+		if endGroup < subFilter.StartLocation.GroupId {
 			return nil, parsed, model.MOQT_REQUEST_ERROR{
-				ErrorCode: model.MOQT_REQUEST_ERROR_CODE_INVALID_RANGE,
+				ErrorCode:    model.MOQT_REQUEST_ERROR_CODE_INVALID_RANGE,
 				ReasonPhrase: model.NewReasonPhrase(fmt.Sprintf("Invalid Subscription Filter Range: End Group %d cannot be smaller than Start Location's Group ID %d", endGroup, subFilter.StartLocation.GroupId)),
 			}
 		}
-		
+
 		subFilter.EndGroup = gonull.NewNullable(endGroup)
 	}
 

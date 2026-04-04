@@ -1,8 +1,7 @@
-package data
+package model
 
 import (
 	"go-moq/internal"
-	"go-moq/pkg/model"
 	"reflect"
 	"testing"
 
@@ -30,18 +29,18 @@ func TestNewSubgroupObject(t *testing.T){
 			opts: []SubgroupObjectOption{
 				SOWithPayload([]byte("testing")),
 				SOWithExtensions(
-					[]model.MoqtKeyValuePair{
-						internal.Must(model.NewMoqtKeyValuePair(2, uint64(1))),
-						internal.Must(model.NewMoqtKeyValuePair(3, []byte("value2"))),
+					[]MoqtKeyValuePair{
+						internal.Must(NewMoqtKeyValuePair(2, uint64(1))),
+						internal.Must(NewMoqtKeyValuePair(3, []byte("value2"))),
 					},
 				),
 			},
 			expected: &SubgroupObject{
 				ObjectIdDelta: 0,
 				Payload:       gonull.NewNullable([]byte("testing")),
-				Extensions: gonull.NewNullable([]model.MoqtKeyValuePair{
-					internal.Must(model.NewMoqtKeyValuePair(2, uint64(1))),
-					internal.Must(model.NewMoqtKeyValuePair(3, []byte("value2"))),
+				Extensions: gonull.NewNullable([]MoqtKeyValuePair{
+					internal.Must(NewMoqtKeyValuePair(2, uint64(1))),
+					internal.Must(NewMoqtKeyValuePair(3, []byte("value2"))),
 				}),
 			},
 			expectErr: false,
@@ -62,18 +61,18 @@ func TestNewSubgroupObject(t *testing.T){
 			name:          "Status object (Normal) with extensions",
 			objectIdDelta: 1,
 			opts: []SubgroupObjectOption{
-				SOWithStatus(model.Normal),
-				SOWithExtensions([]model.MoqtKeyValuePair{
-					internal.Must(model.NewMoqtKeyValuePair(2, uint64(1))),
-					internal.Must(model.NewMoqtKeyValuePair(3, []byte("value2"))),
+				SOWithStatus(Normal),
+				SOWithExtensions([]MoqtKeyValuePair{
+					internal.Must(NewMoqtKeyValuePair(2, uint64(1))),
+					internal.Must(NewMoqtKeyValuePair(3, []byte("value2"))),
 				}),
 			},
 			expected: &SubgroupObject{
 				ObjectIdDelta: 1,
-				Status:        gonull.NewNullable(model.Normal),
-				Extensions: gonull.NewNullable([]model.MoqtKeyValuePair{
-					internal.Must(model.NewMoqtKeyValuePair(2, uint64(1))),
-					internal.Must(model.NewMoqtKeyValuePair(3, []byte("value2"))),
+				Status:        gonull.NewNullable(Normal),
+				Extensions: gonull.NewNullable([]MoqtKeyValuePair{
+					internal.Must(NewMoqtKeyValuePair(2, uint64(1))),
+					internal.Must(NewMoqtKeyValuePair(3, []byte("value2"))),
 				}),
 			},
 			expectErr: false,
@@ -82,10 +81,10 @@ func TestNewSubgroupObject(t *testing.T){
 			name:          "Status object (Non-Normal) with extensions - Error",
 			objectIdDelta: 1,
 			opts: []SubgroupObjectOption{
-				SOWithStatus(model.EndOfGroup),
-				SOWithExtensions([]model.MoqtKeyValuePair{
-					internal.Must(model.NewMoqtKeyValuePair(2, uint64(1))),
-					internal.Must(model.NewMoqtKeyValuePair(3, []byte("value2"))),
+				SOWithStatus(EndOfGroup),
+				SOWithExtensions([]MoqtKeyValuePair{
+					internal.Must(NewMoqtKeyValuePair(2, uint64(1))),
+					internal.Must(NewMoqtKeyValuePair(3, []byte("value2"))),
 				}),
 			},
 			expected:  nil,
@@ -95,7 +94,7 @@ func TestNewSubgroupObject(t *testing.T){
 			name:          "Both status and payload given - Error",
 			objectIdDelta: 5,
 			opts: []SubgroupObjectOption{
-				SOWithStatus(model.Normal),
+				SOWithStatus(Normal),
 				SOWithPayload([]byte("data")),
 			},
 			expected:  nil,
@@ -105,11 +104,11 @@ func TestNewSubgroupObject(t *testing.T){
 			name:          "Status object (Non-Normal) without extensions",
 			objectIdDelta: 10,
 			opts: []SubgroupObjectOption{
-				SOWithStatus(model.EndOfTrack),
+				SOWithStatus(EndOfTrack),
 			},
 			expected: &SubgroupObject{
 				ObjectIdDelta: 10,
-				Status:        gonull.NewNullable(model.EndOfTrack),
+				Status:        gonull.NewNullable(EndOfTrack),
 			},
 			expectErr: false,
 		},

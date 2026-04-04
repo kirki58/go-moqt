@@ -1,7 +1,6 @@
 package data
 
 import (
-	"context"
 	moqt "go-moq"
 	"go-moq/pkg/model"
 	"go-moq/pkg/transport"
@@ -33,26 +32,34 @@ type Publisher struct {
 // For simplicity, it's assumed that each group will have only 1 subgroup, so a 1:1:1 mapping exists for group:subgroup:stream
 func (pub *Publisher) publishForSubscription(sub *Subscription) {
 	latestGroup := ^uint64(0) // assign it to 11111.... (64) this will indicate a newly started stream
-	var latestStream transport.SendStream
+	// var latestStream transport.SendStream
 
 	// Listen to sub.DispatcherChannel until it's open (breaks out when channel is closed by the dispatcher)
-	for obj:= range sub.DispatcherChannel {
-		if obj.Location.GroupId > latestGroup || latestGroup == ^uint64(0){ // group boundary reached, FIN the previous stream, open a new stream
-			if latestGroup != ^uint64(0){ // Not recently joined so there is a previous stream
-				latestStream.Close()
-			}
-			latestGroup = obj.Location.GroupId
-			// open a new stream
-			ctx, cancel := context.WithTimeout(pub.Conn.Context(), openStreamTimeoutSecs)
-			latestStream, err := pub.Conn.OpenUniStreamSync(ctx)
-			cancel()
+	for obj := range sub.DispatcherChannel {
+		if obj.Location.GroupId > latestGroup || latestGroup == ^uint64(0) { // group boundary reached, FIN the previous stream, open a new stream
+			// if latestGroup != ^uint64(0){ // Not recently joined so there is a previous stream
+			// 	latestStream.Close()
+			// }
+			// latestGroup = obj.Location.GroupId
+			// // open a new stream
+			// ctx, cancel := context.WithTimeout(pub.Conn.Context(), openStreamTimeoutSecs)
+			// latestStream, err := pub.Conn.OpenUniStreamSync(ctx)
+			// cancel()
 
-			if err != nil{
-				// For simplicity if open stream fails we terminate the subscription right now.
-				sub.Dispatcher.Close(sub)
-			}
+			// if err != nil{
+			// 	// For simplicity if open stream fails we terminate the subscription right now.
+			// 	sub.Dispatcher.Close(sub)
+			// }
 
-			// Send subgroup header over the stream
+			// // Send subgroup header over the stream
+			// // since this is a single-subgroup stream it's certain that end of group will be present in the stream
+			// // Extensions are present for every subgroup object within this stream, those who have no metadata to transmit MUST set their extensions length to 0
+			// sgh := model.NewSubGroupHeader(sub.Alias, latestGroup, model.SHWithEndOfGroup(), model.SHWithExtensions(), model.SHWithPublisherPriority(128))
+			// var buf [32]byte
+			// sghBuf := buf[:0] // Create a slice backed by the stack array
+
+			// message.EncodeSubgroupHeader(&sghBuf, sgh)
+			// n, err := latestStream.Write(sghBuf)
 		}
 
 		// send objects over latestStream
@@ -68,7 +75,7 @@ func (pub *Publisher) publishForSubscription(sub *Subscription) {
 // returns ok if joined sucessfully, otherwise (with very small probability of happening) the track is over and it's dispatcher channel is closed
 
 // Will also register the subscription to maps
-func (pub *Publisher) NewSubscription(reqId uint64, ftn *model.MoqtFullTrackName, filter SubscriptionFilter,
+func (pub *Publisher) NewSubscription(reqId uint64, ftn *model.MoqtFullTrackName, filter model.SubscriptionFilter,
 	parameters []model.MoqtKeyValuePair, dispatcherChan <-chan *model.MoqtObject) (*Subscription, *model.MoqtLocation, bool) {
 	pub.latestAliasMutex.Lock()
 	trackAlias := pub.latestAlias
@@ -104,29 +111,29 @@ func (pub *Publisher) NewSubscription(reqId uint64, ftn *model.MoqtFullTrackName
 }
 
 // returns false when trying to read closed dispatcher channel (means track is over before joining)
-func (pub *Publisher) JoinEstablishedSubscription(sub *Subscription) bool{
+func (pub *Publisher) JoinEstablishedSubscription(sub *Subscription) bool {
 	// Note: Only NextGroupStart join is implemented for now.
 	switch sub.Filter.FilterType {
-	case NextGroupStart:
+	case model.NextGroupStart:
 		// Wait for next group start to join
-		latestObj := <- sub.DispatcherChannel
+		latestObj := <-sub.DispatcherChannel
 		latestGroup := latestObj.Location.GroupId
 
-		for{
-			obj, ok := <- sub.DispatcherChannel
-			if !ok{
+		for {
+			obj, ok := <-sub.DispatcherChannel
+			if !ok {
 				return false
 			}
 
 			if obj.Location.GroupId > latestGroup { // reached the next group, we can join now
-				go pub.publishForSubscription(sub) // this will block until the track ends 
-				return true // sucessfully joined
+				go pub.publishForSubscription(sub) // this will block until the track ends
+				return true                        // sucessfully joined
 			}
 		}
 	default:
 		return false
 	}
-	
+
 }
 
 // func (pub *Publisher) HandleDrop(loc model.MoqtLocation, isGroupStart bool){

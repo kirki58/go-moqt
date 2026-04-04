@@ -1,8 +1,7 @@
-package data
+package model
 
 import (
 	"fmt"
-	"go-moq/pkg/model"
 
 	"github.com/LukaGiorgadze/gonull/v2"
 )
@@ -85,9 +84,9 @@ func NewObjectDatagramType(typeId uint64) (*ObjectDatagramType, error) {
 	// Note: While the spec defines specific IDs in Table 5, parsing bitwise is robust.
 	// Note: Bit 4 is reserved for Streams and must be 0 for Datagrams.
 	if typeId > 0x2D || (typeId&0x10) != 0 {
-		return &ObjectDatagramType{}, &model.MOQT_SESSION_TERMINATION_ERROR{
-			ErrorCode: model.MOQT_SESSION_TERMINATION_ERROR_CODE_PROTOCOL_VIOLATION,
-			ReasonPhrase: model.NewReasonPhrase(fmt.Sprintf("invalid object datagram type: 0x%x", typeId)),
+		return &ObjectDatagramType{}, &MOQT_SESSION_TERMINATION_ERROR{
+			ErrorCode: MOQT_SESSION_TERMINATION_ERROR_CODE_PROTOCOL_VIOLATION,
+			ReasonPhrase: NewReasonPhrase(fmt.Sprintf("invalid object datagram type: 0x%x", typeId)),
 		}
 	}
 
@@ -108,9 +107,9 @@ func NewObjectDatagramType(typeId uint64) (*ObjectDatagramType, error) {
 	if dt.StatusOrPayload && dt.EndOfGroup {
 		// Depending on strictness, you might return an error or simply force false.
 		// For strict correctness based on Table 5:
-		return &ObjectDatagramType{}, &model.MOQT_SESSION_TERMINATION_ERROR{
-			ErrorCode: model.MOQT_SESSION_TERMINATION_ERROR_CODE_PROTOCOL_VIOLATION,
-			ReasonPhrase: model.NewReasonPhrase(fmt.Sprintf("invalid object datagram type: 0x%x, Status and EndOfGroup bits cannot both be set", typeId)),
+		return &ObjectDatagramType{}, &MOQT_SESSION_TERMINATION_ERROR{
+			ErrorCode: MOQT_SESSION_TERMINATION_ERROR_CODE_PROTOCOL_VIOLATION,
+			ReasonPhrase: NewReasonPhrase(fmt.Sprintf("invalid object datagram type: 0x%x, Status and EndOfGroup bits cannot both be set", typeId)),
 		}
 	}
 
@@ -177,12 +176,12 @@ func (dt *ObjectDatagramType) IsValid() bool{
 type ObjectDatagram struct {
 	Dtype             ObjectDatagramType
 	TrackAlias        uint64
-	Location          model.MoqtLocation // ObjectId is set to zero if it's not "present"
+	Location          MoqtLocation // ObjectId is set to zero if it's not "present"
 
 	// Optional fields are marked as "nullable"
 	PublisherPriority gonull.Nullable[uint8]
-	Extensions        gonull.Nullable[[]model.MoqtKeyValuePair]
-	Status            gonull.Nullable[model.MoqtObjectStatus]
+	Extensions        gonull.Nullable[[]MoqtKeyValuePair]
+	Status            gonull.Nullable[MoqtObjectStatus]
 	Payload           gonull.Nullable[[]byte]
 }
 
@@ -202,7 +201,7 @@ func WithPublisherPriority(priority uint8) ObjectDatagramOption {
 	}
 }
 
-func WithExtensions(ext []model.MoqtKeyValuePair) ObjectDatagramOption {
+func WithExtensions(ext []MoqtKeyValuePair) ObjectDatagramOption {
 	return func(od *ObjectDatagram) {
 		od.Dtype.ExtensionsPresent = true
 		od.Extensions = gonull.NewNullable(ext)
@@ -216,7 +215,7 @@ func WithEndOfGroup() ObjectDatagramOption {
 }
 
 
-func WithStatus(status model.MoqtObjectStatus) ObjectDatagramOption {
+func WithStatus(status MoqtObjectStatus) ObjectDatagramOption {
 	return func(od *ObjectDatagram) {
 		od.Dtype.StatusOrPayload = true
 		od.Status = gonull.NewNullable(status)
@@ -238,7 +237,7 @@ func NewObjectDatagram(trackAlias uint64, groupId uint64, opts ...ObjectDatagram
 	// Define default configuration
 	dg := &ObjectDatagram{
 		TrackAlias: trackAlias,
-		Location: model.MoqtLocation{GroupId: groupId, ObjectId: 0},
+		Location: MoqtLocation{GroupId: groupId, ObjectId: 0},
 	}
 	// Apply all options
 	for _, opt := range opts {
@@ -259,7 +258,7 @@ func NewObjectDatagram(trackAlias uint64, groupId uint64, opts ...ObjectDatagram
 	}
 
 	// Validate Rule 3
-	if dg.Status.Valid && dg.Status.Val != model.Normal && dg.Extensions.Valid {
+	if dg.Status.Valid && dg.Status.Val != Normal && dg.Extensions.Valid {
 		return nil, fmt.Errorf("non-normal status datagrams MUST NOT carry extensions")
 	}
 

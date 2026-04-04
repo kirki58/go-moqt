@@ -1,11 +1,10 @@
-package data
+package model
 
 import (
 	"reflect"
 	"testing"
 
 	"go-moq/internal"
-	"go-moq/pkg/model"
 
 	"github.com/LukaGiorgadze/gonull/v2"
 )
@@ -270,7 +269,7 @@ func TestNewObjectDatagram(t *testing.T) {
 			trackAlias: 0,
 			groupID:    0,
 			opts: []ObjectDatagramOption{
-				WithStatus(model.DoesNotExist),
+				WithStatus(DoesNotExist),
 				WithPayload([]byte{0x01, 0x02}),
 			},
 			expectErr: true,
@@ -289,7 +288,7 @@ func TestNewObjectDatagram(t *testing.T) {
 			trackAlias: 0,
 			groupID:    0,
 			opts: []ObjectDatagramOption{
-				WithStatus(model.EndOfGroup),
+				WithStatus(EndOfGroup),
 				WithEndOfGroup(),
 			},
 			expectErr: true,
@@ -300,7 +299,7 @@ func TestNewObjectDatagram(t *testing.T) {
 			trackAlias: 0,
 			groupID:    0,
 			opts: []ObjectDatagramOption{
-				WithStatus(model.EndOfGroup),
+				WithStatus(EndOfGroup),
 				WithObjectId(2),
 			},
 			expectErr: false,
@@ -311,8 +310,8 @@ func TestNewObjectDatagram(t *testing.T) {
 					ObjectIdPresent: true,
 				},
 				TrackAlias: 0,
-				Location:   model.MoqtLocation{GroupId: 0, ObjectId: 2},
-				Status: gonull.NewNullable(model.EndOfGroup),
+				Location:   MoqtLocation{GroupId: 0, ObjectId: 2},
+				Status: gonull.NewNullable(EndOfGroup),
 			},
 		},
 		{
@@ -328,7 +327,7 @@ func TestNewObjectDatagram(t *testing.T) {
 					TypeID: 0x0C,
 				},
 				TrackAlias: 0,
-				Location:   model.MoqtLocation{GroupId: 0, ObjectId: 0},
+				Location:   MoqtLocation{GroupId: 0, ObjectId: 0},
 				Payload:    gonull.NewNullable([]byte{0x01, 0x02}),
 			},
 		},
@@ -338,14 +337,14 @@ func TestNewObjectDatagram(t *testing.T) {
 			groupID:    0,
 			opts: []ObjectDatagramOption{
 				WithExtensions(
-					[]model.MoqtKeyValuePair{
-						internal.Must(model.NewMoqtKeyValuePair(2, uint64(1))),
-						internal.Must(model.NewMoqtKeyValuePair(4, uint64(123))),
+					[]MoqtKeyValuePair{
+						internal.Must(NewMoqtKeyValuePair(2, uint64(1))),
+						internal.Must(NewMoqtKeyValuePair(4, uint64(123))),
 					},
 				),
 				WithObjectId(2),
 				WithPublisherPriority(12),
-				WithStatus(model.Normal),
+				WithStatus(Normal),
 			},
 			expectErr: false,
 			expected: &ObjectDatagram{
@@ -357,16 +356,16 @@ func TestNewObjectDatagram(t *testing.T) {
 					StatusOrPayload:   true,
 				},
 				TrackAlias: 0,
-				Location: model.MoqtLocation{
+				Location: MoqtLocation{
 					GroupId:  0,
 					ObjectId: 2,
 				},
 				PublisherPriority: gonull.NewNullable(uint8(12)),
-				Extensions: gonull.NewNullable([]model.MoqtKeyValuePair{
-					internal.Must(model.NewMoqtKeyValuePair(2, uint64(1))),
-					internal.Must(model.NewMoqtKeyValuePair(4, uint64(123))),
+				Extensions: gonull.NewNullable([]MoqtKeyValuePair{
+					internal.Must(NewMoqtKeyValuePair(2, uint64(1))),
+					internal.Must(NewMoqtKeyValuePair(4, uint64(123))),
 				}),
-				Status: gonull.NewNullable(model.Normal),
+				Status: gonull.NewNullable(Normal),
 			},
 		},
 		{
@@ -375,9 +374,9 @@ func TestNewObjectDatagram(t *testing.T) {
 			groupID:    0,
 			opts: []ObjectDatagramOption{
 				WithExtensions(
-					[]model.MoqtKeyValuePair{
-						internal.Must(model.NewMoqtKeyValuePair(2, uint64(1))),
-						internal.Must(model.NewMoqtKeyValuePair(4, uint64(123))),
+					[]MoqtKeyValuePair{
+						internal.Must(NewMoqtKeyValuePair(2, uint64(1))),
+						internal.Must(NewMoqtKeyValuePair(4, uint64(123))),
 					},
 				),
 				WithObjectId(2),
@@ -395,14 +394,14 @@ func TestNewObjectDatagram(t *testing.T) {
 					EndOfGroup:        true,
 				},
 				TrackAlias: 0,
-				Location: model.MoqtLocation{
+				Location: MoqtLocation{
 					GroupId:  0,
 					ObjectId: 2,
 				},
 				PublisherPriority: gonull.NewNullable(uint8(12)),
-				Extensions: gonull.NewNullable([]model.MoqtKeyValuePair{
-					internal.Must(model.NewMoqtKeyValuePair(2, uint64(1))),
-					internal.Must(model.NewMoqtKeyValuePair(4, uint64(123))),
+				Extensions: gonull.NewNullable([]MoqtKeyValuePair{
+					internal.Must(NewMoqtKeyValuePair(2, uint64(1))),
+					internal.Must(NewMoqtKeyValuePair(4, uint64(123))),
 				}),
 				Payload: gonull.NewNullable([]byte{0x01, 0x02}),
 			},

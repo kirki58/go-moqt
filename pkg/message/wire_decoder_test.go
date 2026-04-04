@@ -2,7 +2,6 @@ package message
 
 import (
 	"go-moq/internal"
-	"go-moq/pkg/data"
 	"go-moq/pkg/model"
 
 	"reflect"
@@ -309,7 +308,7 @@ func TestDecodeObjectDatagram(t *testing.T) {
 	tests := []struct {
 		name       string
 		buf        []byte
-		expectedDG *data.ObjectDatagram
+		expectedDG *model.ObjectDatagram
 		expectedN  int
 		expectErr  bool
 	}{
@@ -339,17 +338,17 @@ func TestDecodeObjectDatagram(t *testing.T) {
 				// Dump the rest with the paylaod as is
 				0x21, 0x22, 0x22, 0xFF,
 			},
-			expectedDG: internal.Must(data.NewObjectDatagram(1, 2,
-				data.WithObjectId(12),
-				data.WithPublisherPriority(12),
-				data.WithExtensions(
+			expectedDG: internal.Must(model.NewObjectDatagram(1, 2,
+				model.WithObjectId(12),
+				model.WithPublisherPriority(12),
+				model.WithExtensions(
 					[]model.MoqtKeyValuePair{
 						internal.Must(model.NewMoqtKeyValuePair(10, uint64(11))),
 						internal.Must(model.NewMoqtKeyValuePair(21, []byte{0x00, 0x01})),
 					},
 				),
-				data.WithEndOfGroup(),
-				data.WithPayload(
+				model.WithEndOfGroup(),
+				model.WithPayload(
 					[]byte{
 						0x21, 0x22, 0x22, 0xFF,
 					},
@@ -383,32 +382,32 @@ func TestDecodeObjectDatagram(t *testing.T) {
 
 				// Payload field ommited entirely in status object
 			},
-			expectedDG: internal.Must(data.NewObjectDatagram(1, 2,
-				data.WithObjectId(12),
-				data.WithPublisherPriority(12),
-				data.WithExtensions(
+			expectedDG: internal.Must(model.NewObjectDatagram(1, 2,
+				model.WithObjectId(12),
+				model.WithPublisherPriority(12),
+				model.WithExtensions(
 					[]model.MoqtKeyValuePair{
 						internal.Must(model.NewMoqtKeyValuePair(10, uint64(11))),
 						internal.Must(model.NewMoqtKeyValuePair(21, []byte{0x00, 0x01})),
 					},
 				),
-				data.WithStatus(model.Normal),
+				model.WithStatus(model.Normal),
 			)),
 			expectedN: 13,
 		},
 		{
 			name: "Non-normal status with extensions, protocol violation",
 			buf: []byte{
-				0x21, // TypeId status, extensions, priority, object id
-				0x01, // Track Alias
+				0x21,       // TypeId status, extensions, priority, object id
+				0x01,       // Track Alias
 				0x02, 0x0C, // Location (Group 2, Object 12)
-				0x0C,       // Publisher Priority
+				0x0C,             // Publisher Priority
 				0x02, 0x00, 0x01, // Extensions (Len 2, Type 0, Val 1)
 				0x03, // Status (EndOfGroup)
 			},
 			expectedDG: nil,
-			expectedN: 8,
-			expectErr: true, // Protocol violation: non-Normal status with extensions
+			expectedN:  8,
+			expectErr:  true, // Protocol violation: non-Normal status with extensions
 		},
 	}
 
@@ -439,7 +438,7 @@ func TestDecodeSubgroupHeader(t *testing.T) {
 	tests := []struct {
 		name        string
 		buf         []byte
-		expectedSGH *data.SubGroupHeader
+		expectedSGH *model.SubGroupHeader
 		expectedN   int
 		expectErr   bool
 	}{
@@ -451,8 +450,8 @@ func TestDecodeSubgroupHeader(t *testing.T) {
 				0x05, // Group ID
 				0x08, // Publisher Priority
 			},
-			expectedSGH: data.NewSubGroupHeader(1, 5,
-				data.SHWithPublisherPriority(8),
+			expectedSGH: model.NewSubGroupHeader(1, 5,
+				model.SHWithPublisherPriority(8),
 			),
 			expectedN: 4,
 			expectErr: false,
@@ -466,11 +465,11 @@ func TestDecodeSubgroupHeader(t *testing.T) {
 				0x0A, // Subgroup ID
 				0x08, // Publisher Priority
 			},
-			expectedSGH: data.NewSubGroupHeader(1, 5,
-				data.SHWithSubgroupId(10),
-				data.SHWithPublisherPriority(8),
-				data.SHWithExtensions(),
-				data.SHWithEndOfGroup(),
+			expectedSGH: model.NewSubGroupHeader(1, 5,
+				model.SHWithSubgroupId(10),
+				model.SHWithPublisherPriority(8),
+				model.SHWithExtensions(),
+				model.SHWithEndOfGroup(),
 			),
 			expectedN: 5,
 			expectErr: false,
@@ -510,10 +509,10 @@ func TestDecodeTrackNamespace(t *testing.T) {
 		{
 			name: "Regular track namespace with 2 fields",
 			buf: []byte{
-				0x02,       // Number of Track Namespace Fields (2)
-				0x05,       // Length of first field (5)
+				0x02,                    // Number of Track Namespace Fields (2)
+				0x05,                    // Length of first field (5)
 				'h', 'e', 'l', 'l', 'o', // First field value ("hello")
-				0x05,       // Length of second field (5)
+				0x05,                    // Length of second field (5)
 				'w', 'o', 'r', 'l', 'd', // Second field value ("world")
 			},
 			expectedTrackNamespace: model.MoqtTrackNamespace([][]byte{
@@ -550,19 +549,19 @@ func TestDecodeTrackNamespace(t *testing.T) {
 
 func TestDecodeMoqtFullTrackName(t *testing.T) {
 	tests := []struct {
-		name                 string
-		buf                  []byte
+		name                  string
+		buf                   []byte
 		expectedFullTrackName *model.MoqtFullTrackName
-		expectedN            int
-		expectErr            bool
+		expectedN             int
+		expectErr             bool
 	}{
 		{
 			name: "Regular full track name with 1 track name field and track name",
 			buf: []byte{
-				0x01,       // Number of Track Namespace Fields (1)
-				0x05,       // Length of first field (5)
+				0x01,                    // Number of Track Namespace Fields (1)
+				0x05,                    // Length of first field (5)
 				'h', 'e', 'l', 'l', 'o', // First field value ("hello")
-				0x05,       // Length of Track Name (5)
+				0x05,                    // Length of Track Name (5)
 				'w', 'o', 'r', 'l', 'd', // Track Name value ("world")
 			},
 			expectedFullTrackName: &model.MoqtFullTrackName{
@@ -572,7 +571,7 @@ func TestDecodeMoqtFullTrackName(t *testing.T) {
 				Name: []byte("world"),
 			},
 			expectedN: 13,
-			expectErr: false, 
+			expectErr: false,
 		},
 	}
 
@@ -601,11 +600,11 @@ func TestDecodeMoqtFullTrackName(t *testing.T) {
 
 func TestDecodeMoqtReasonPhrase(t *testing.T) {
 	tests := []struct {
-		name               string
-		buf                []byte
-		expectedReason     model.MoqtReasonPhrase
-		expectedN          int
-		expectErr          bool
+		name           string
+		buf            []byte
+		expectedReason model.MoqtReasonPhrase
+		expectedN      int
+		expectErr      bool
 	}{
 		{
 			name:           "Simple Reason Phrase",
@@ -664,21 +663,21 @@ func TestDecodeSubgroupObject(t *testing.T) {
 	tests := []struct {
 		name               string
 		buf                []byte
-		subgroupHeaderType *data.SubGroupHeaderType
-		expectedSGO        *data.SubgroupObject
+		subgroupHeaderType *model.SubGroupHeaderType
+		expectedSGO        *model.SubgroupObject
 		expectedN          int
 		expectErr          bool
 	}{
 		{
 			name: "Basic object with payload",
 			buf: []byte{
-				0x01, // Object ID Delta
-				0x04, // Payload Length
+				0x01,                   // Object ID Delta
+				0x04,                   // Payload Length
 				0x0a, 0x0b, 0x0c, 0x0d, // Payload
 			},
-			subgroupHeaderType: internal.Must(data.NewSubGroupHeaderType(uint64(0x10))),
-			expectedSGO: internal.Must(data.NewSubgroupObject(0x01,
-				data.SOWithPayload([]byte{0x0a, 0x0b, 0x0c, 0x0d}),
+			subgroupHeaderType: internal.Must(model.NewSubGroupHeaderType(uint64(0x10))),
+			expectedSGO: internal.Must(model.NewSubgroupObject(0x01,
+				model.SOWithPayload([]byte{0x0a, 0x0b, 0x0c, 0x0d}),
 			)),
 			expectedN: 6,
 			expectErr: false,
@@ -691,10 +690,10 @@ func TestDecodeSubgroupObject(t *testing.T) {
 				0x00, // Payload Length (0)
 				0x00, // Status (Normal)
 			},
-			subgroupHeaderType: internal.Must(data.NewSubGroupHeaderType(uint64(0x11))), // ExtensionsPresent = true
-			expectedSGO: internal.Must(data.NewSubgroupObject(0x02,
-				data.SOWithStatus(model.Normal),
-				data.SOWithExtensions([]model.MoqtKeyValuePair{
+			subgroupHeaderType: internal.Must(model.NewSubGroupHeaderType(uint64(0x11))), // ExtensionsPresent = true
+			expectedSGO: internal.Must(model.NewSubgroupObject(0x02,
+				model.SOWithStatus(model.Normal),
+				model.SOWithExtensions([]model.MoqtKeyValuePair{
 					internal.Must(model.NewMoqtKeyValuePair(0, uint64(1))),
 				}),
 			)),
@@ -709,7 +708,7 @@ func TestDecodeSubgroupObject(t *testing.T) {
 				0x00, // Payload Length (0)
 				0x03, // Status (EndOfGroup)
 			},
-			subgroupHeaderType: internal.Must(data.NewSubGroupHeaderType(uint64(0x11))), // ExtensionsPresent = true
+			subgroupHeaderType: internal.Must(model.NewSubGroupHeaderType(uint64(0x11))), // ExtensionsPresent = true
 			expectedSGO:        nil,
 			expectedN:          6,
 			expectErr:          true,
@@ -721,12 +720,12 @@ func TestDecodeSubgroupObject(t *testing.T) {
 				0x00, // Payload Length (0)
 				0x00, // Status (Normal)
 			},
-			subgroupHeaderType: internal.Must(data.NewSubGroupHeaderType(uint64(0x10))), // ExtensionsPresent = false
-			expectedSGO: internal.Must(data.NewSubgroupObject(0x04,
-				data.SOWithStatus(model.Normal),
+			subgroupHeaderType: internal.Must(model.NewSubGroupHeaderType(uint64(0x10))), // ExtensionsPresent = false
+			expectedSGO: internal.Must(model.NewSubgroupObject(0x04,
+				model.SOWithStatus(model.Normal),
 			)),
 			expectedN: 3,
-			expectErr: false,	
+			expectErr: false,
 		},
 		{
 			name: "Non-normal status object in extensions-present subgroup header (ext length must be 0)",
@@ -736,9 +735,9 @@ func TestDecodeSubgroupObject(t *testing.T) {
 				0x00, // Payload Length (0)
 				0x03, // Status (EndOfGroup)
 			},
-			subgroupHeaderType: internal.Must(data.NewSubGroupHeaderType(uint64(0x11))), // ExtensionsPresent = true
-			expectedSGO: internal.Must(data.NewSubgroupObject(0x05,
-				data.SOWithStatus(model.EndOfGroup),
+			subgroupHeaderType: internal.Must(model.NewSubGroupHeaderType(uint64(0x11))), // ExtensionsPresent = true
+			expectedSGO: internal.Must(model.NewSubgroupObject(0x05,
+				model.SOWithStatus(model.EndOfGroup),
 			)),
 			expectedN: 4,
 			expectErr: false,
@@ -768,20 +767,20 @@ func TestDecodeSubgroupObject(t *testing.T) {
 	}
 }
 
-func TestDecodeSubscriptionFilter(t *testing.T){
+func TestDecodeSubscriptionFilter(t *testing.T) {
 	// TODO: add decode tests for AbsoluteStart and AbsoluteRange too later
 	tests := []struct {
 		name           string
 		buf            []byte
-		expectedFilter *data.SubscriptionFilter
+		expectedFilter *model.SubscriptionFilter
 		expectedN      int
 		expectErr      bool
 	}{
 		{
 			name: "NextGroupStart Filter",
 			buf:  []byte{0x01},
-			expectedFilter: &data.SubscriptionFilter{
-				FilterType: data.NextGroupStart,
+			expectedFilter: &model.SubscriptionFilter{
+				FilterType: model.NextGroupStart,
 			},
 			expectedN: 1,
 			expectErr: false,
@@ -789,8 +788,8 @@ func TestDecodeSubscriptionFilter(t *testing.T){
 		{
 			name: "LargestObject Filter",
 			buf:  []byte{0x02},
-			expectedFilter: &data.SubscriptionFilter{
-				FilterType: data.LargestObject,
+			expectedFilter: &model.SubscriptionFilter{
+				FilterType: model.LargestObject,
 			},
 			expectedN: 1,
 			expectErr: false,
@@ -800,7 +799,7 @@ func TestDecodeSubscriptionFilter(t *testing.T){
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			filter, n, err := DecodeSubscriptionFilter(tt.buf)
-			
+
 			if tt.expectErr {
 				if err == nil {
 					t.Errorf("DecodeSubscriptionFilter() expected an error, but got none")
@@ -818,5 +817,5 @@ func TestDecodeSubscriptionFilter(t *testing.T){
 			}
 		})
 	}
-	
+
 }

@@ -1,8 +1,7 @@
-package data
+package model
 
 import (
 	"fmt"
-	"go-moq/pkg/model"
 
 	"github.com/LukaGiorgadze/gonull/v2"
 )
@@ -79,9 +78,9 @@ func NewSubGroupHeaderType(typeId uint64) (*SubGroupHeaderType, error) {
 	// The Type field in the SUBGROUP_HEADER takes the form 0b00X1XXXX (or the set of values from 0x10 to 0x1F, 0x30 to 0x3F),
 	// where bit 4 is always set to 1.
 	if (typeId&0x10) == 0 || (typeId > 0x1F && typeId < 0x30) || typeId > 0x3F {
-		return nil, &model.MOQT_SESSION_TERMINATION_ERROR{
-			ErrorCode:    model.MOQT_SESSION_TERMINATION_ERROR_CODE_PROTOCOL_VIOLATION,
-			ReasonPhrase: model.NewReasonPhrase(fmt.Sprintf("tried to resolve invalid subgroup header type: 0x%x", typeId)),
+		return nil, &MOQT_SESSION_TERMINATION_ERROR{
+			ErrorCode:    MOQT_SESSION_TERMINATION_ERROR_CODE_PROTOCOL_VIOLATION,
+			ReasonPhrase: NewReasonPhrase(fmt.Sprintf("tried to resolve invalid subgroup header type: 0x%x", typeId)),
 		}
 	}
 
@@ -102,9 +101,9 @@ func NewSubGroupHeaderType(typeId uint64) (*SubGroupHeaderType, error) {
 	case 0b10:
 		sgt.SGIDMode = SubgroupIdModePresent
 	case 0b11:
-		return nil, &model.MOQT_SESSION_TERMINATION_ERROR{
-			ErrorCode:    model.MOQT_SESSION_TERMINATION_ERROR_CODE_PROTOCOL_VIOLATION,
-			ReasonPhrase: model.NewReasonPhrase(fmt.Sprintf("Reserved subgroup ID mode (0b11) in type: 0x%x", typeId)),
+		return nil, &MOQT_SESSION_TERMINATION_ERROR{
+			ErrorCode:    MOQT_SESSION_TERMINATION_ERROR_CODE_PROTOCOL_VIOLATION,
+			ReasonPhrase: NewReasonPhrase(fmt.Sprintf("Reserved subgroup ID mode (0b11) in type: 0x%x", typeId)),
 		}
 	}
 

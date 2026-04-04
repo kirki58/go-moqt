@@ -1,7 +1,6 @@
 package message
 
 import (
-	"go-moq/pkg/data"
 	"go-moq/pkg/model"
 
 	"github.com/quic-go/quic-go/quicvarint"
@@ -31,24 +30,24 @@ func EncodeMoqtLocation(b *[]byte, loc model.MoqtLocation) {
 //   Value (..)
 // }
 
-func EncodeMoqtKeyValuePair(b *[]byte, kvPair model.MoqtKeyValuePair){
+func EncodeMoqtKeyValuePair(b *[]byte, kvPair model.MoqtKeyValuePair) {
 	// If type is even
 	// type(i) + value(i)
 
 	// If type is odd
 	// type(i) + length(i) + buf[len]
 
-	if kvPair.Type % 2 == 0 {
+	if kvPair.Type%2 == 0 {
 		*b = quicvarint.Append(*b, kvPair.Type)
 		*b = quicvarint.Append(*b, kvPair.ValueUInt64)
 	} else {
 		*b = quicvarint.Append(*b, kvPair.Type)
 		*b = quicvarint.Append(*b, uint64(len(kvPair.ValueBytes)))
-		*b = append(*b, kvPair.ValueBytes... )
+		*b = append(*b, kvPair.ValueBytes...)
 	}
 }
 
-func EncodeExtensions(b *[]byte, kvPairs []model.MoqtKeyValuePair){
+func EncodeExtensions(b *[]byte, kvPairs []model.MoqtKeyValuePair) {
 	// Object Extension Headers are serialized as Key-Value-Pairs (see Figure 2), prefixed by the length of the serialized Key-Value-Pairs, in bytes
 
 	// 	Extensions {
@@ -75,7 +74,7 @@ func EncodeExtensions(b *[]byte, kvPairs []model.MoqtKeyValuePair){
 //   [Object Payload (..),]
 // }
 
-func EncodeObjectDatagram(b *[]byte, dg *data.ObjectDatagram){
+func EncodeObjectDatagram(b *[]byte, dg *model.ObjectDatagram) {
 	*b = quicvarint.Append(*b, dg.Dtype.TypeID)
 	*b = quicvarint.Append(*b, dg.TrackAlias)
 	EncodeMoqtLocation(b, dg.Location) // Note that if object id is ommited than it defaults to 0
@@ -93,20 +92,21 @@ func EncodeObjectDatagram(b *[]byte, dg *data.ObjectDatagram){
 	}
 }
 
-// OBJECT_DATAGRAM {
-//   Type (i) = 0x00-0x1F,0x20-21,0x24-25,0x28-29,0x2C-2D
-//   Track Alias (i),
-//   Group ID (i),
-//   [Object ID (i),]
-//   [Publisher Priority (8),]
-//   [Extensions (..),]
-//   [Object Status (i),]
-// }
+//	OBJECT_DATAGRAM {
+//	  Type (i) = 0x00-0x1F,0x20-21,0x24-25,0x28-29,0x2C-2D
+//	  Track Alias (i),
+//	  Group ID (i),
+//	  [Object ID (i),]
+//	  [Publisher Priority (8),]
+//	  [Extensions (..),]
+//	  [Object Status (i),]
+//	}
+//
 // In this function we do not encode the payload into the slice
 // In video streams payloads can be big, and Instead of loading them into the memory we might want to directly write them to the network transport stream.
 // After encoding of "only" the header, than writing it to the stream, we can write "payload" to the stream separetly in session implementation
 // The testing for this function is not necessary as long as the common parts of the code are not changed
-func EncodeObjectDatagramHeader(b *[]byte, dg *data.ObjectDatagram){
+func EncodeObjectDatagramHeader(b *[]byte, dg *model.ObjectDatagram) {
 	*b = quicvarint.Append(*b, dg.Dtype.TypeID)
 	*b = quicvarint.Append(*b, dg.TrackAlias)
 	EncodeMoqtLocation(b, dg.Location) // Note that if object id is ommited than it defaults to 0
@@ -122,19 +122,19 @@ func EncodeObjectDatagramHeader(b *[]byte, dg *data.ObjectDatagram){
 	}
 }
 
-// SUBGROUP_HEADER {
-//   Type (i) = 0x10..0x1D,
-//   Track Alias (i),
-//   Group ID (i),
-//   [Subgroup ID (i),]
-//   [Publisher Priority (8),]
-// }
-func EncodeSubgroupHeader(b *[]byte, sgh *data.SubGroupHeader){
+//	SUBGROUP_HEADER {
+//	  Type (i) = 0x10..0x1D,
+//	  Track Alias (i),
+//	  Group ID (i),
+//	  [Subgroup ID (i),]
+//	  [Publisher Priority (8),]
+//	}
+func EncodeSubgroupHeader(b *[]byte, sgh *model.SubGroupHeader) {
 	*b = quicvarint.Append(*b, sgh.SGType.TypeID)
 	*b = quicvarint.Append(*b, sgh.TrackAlias)
 	*b = quicvarint.Append(*b, sgh.GroupId)
 
-	if sgh.SGType.SGIDMode == data.SubgroupIdModePresent {
+	if sgh.SGType.SGIDMode == model.SubgroupIdModePresent {
 		*b = quicvarint.Append(*b, sgh.SubgroupId.Val)
 	}
 	if sgh.SGType.PriorityPresent {
@@ -150,7 +150,7 @@ func EncodeSubgroupHeader(b *[]byte, sgh *data.SubGroupHeader){
 //   [Object Payload (..),]
 // }
 
-func EncodeSubgroupObject(b* []byte, sgo *data.SubgroupObject){
+func EncodeSubgroupObject(b *[]byte, sgo *model.SubgroupObject) {
 	*b = quicvarint.Append(*b, sgo.ObjectIdDelta) // Encode ObjectIdDelta as varint
 	// Encode extensions if they exist
 	if sgo.Extensions.Valid {
@@ -158,11 +158,11 @@ func EncodeSubgroupObject(b* []byte, sgo *data.SubgroupObject){
 	}
 	// For a status object payload length is encoded as 0 and then the status is encoded
 	if sgo.Status.Valid {
-		*b = quicvarint.Append(*b, uint64(0)) // Encode payload length (which is 0 for a status object)
+		*b = quicvarint.Append(*b, uint64(0))              // Encode payload length (which is 0 for a status object)
 		*b = quicvarint.Append(*b, uint64(sgo.Status.Val)) // Encode status value
-	}else if sgo.Payload.Valid {
+	} else if sgo.Payload.Valid {
 		*b = quicvarint.Append(*b, uint64(len(sgo.Payload.Val))) // Encode payload length
-		*b = append(*b, sgo.Payload.Val...) // Encode the buffer in
+		*b = append(*b, sgo.Payload.Val...)                      // Encode the buffer in
 	}
 }
 
@@ -178,7 +178,7 @@ func EncodeSubgroupObject(b* []byte, sgo *data.SubgroupObject){
 //   Track Namespace Field Value (..)
 // }
 
-func EncodeTrackNamespace(b* []byte, trackNamespace model.MoqtTrackNamespace){
+func EncodeTrackNamespace(b *[]byte, trackNamespace model.MoqtTrackNamespace) {
 	*b = quicvarint.Append(*b, uint64(len(trackNamespace)))
 
 	for _, field := range trackNamespace {
@@ -187,12 +187,12 @@ func EncodeTrackNamespace(b* []byte, trackNamespace model.MoqtTrackNamespace){
 	}
 }
 
-// FullTrackName {
-//  Track Namespace (..),
-//  Track Name Length (i),
-//  Track Name (..)
-//}
-func EncodeMoqtFullTrackName(b* []byte, fullTrackName model.MoqtFullTrackName){
+//	FullTrackName {
+//	 Track Namespace (..),
+//	 Track Name Length (i),
+//	 Track Name (..)
+//	}
+func EncodeMoqtFullTrackName(b *[]byte, fullTrackName model.MoqtFullTrackName) {
 	EncodeTrackNamespace(b, fullTrackName.Namespace)
 	*b = quicvarint.Append(*b, uint64(len(fullTrackName.Name)))
 	*b = append(*b, fullTrackName.Name...)
@@ -203,7 +203,7 @@ func EncodeMoqtFullTrackName(b* []byte, fullTrackName model.MoqtFullTrackName){
 //   Reason Phrase Value (..)
 // }
 
-func EncodeMoqtReasonPhrase(b* []byte, reasonPhrase model.MoqtReasonPhrase){
+func EncodeMoqtReasonPhrase(b *[]byte, reasonPhrase model.MoqtReasonPhrase) {
 	*b = quicvarint.Append(*b, uint64(len(reasonPhrase)))
 	*b = append(*b, string(reasonPhrase)...)
 }
@@ -214,16 +214,16 @@ func EncodeMoqtReasonPhrase(b* []byte, reasonPhrase model.MoqtReasonPhrase){
 //   [End Group (i),]
 // }
 
-func EncodeSubscriptionFilter(b* []byte, subscriptionFilter *data.SubscriptionFilter){
+func EncodeSubscriptionFilter(b *[]byte, subscriptionFilter *model.SubscriptionFilter) {
 	*b = quicvarint.Append(*b, uint64(subscriptionFilter.FilterType)) // Encode filter type
 
 	// Only encode start location on the wire for AbsoluteStart ro AbsoluteRange filters
-	if subscriptionFilter.FilterType == data.AbsoluteStart || subscriptionFilter.FilterType == data.AbsoluteRange{
+	if subscriptionFilter.FilterType == model.AbsoluteStart || subscriptionFilter.FilterType == model.AbsoluteRange {
 		EncodeMoqtLocation(b, subscriptionFilter.StartLocation) // Encode start location
 	}
 
 	// Only encode end group with AbsoluteRange filter
-	if subscriptionFilter.FilterType == data.AbsoluteRange{
+	if subscriptionFilter.FilterType == model.AbsoluteRange {
 		*b = quicvarint.Append(*b, subscriptionFilter.EndGroup.Val)
 	}
 }

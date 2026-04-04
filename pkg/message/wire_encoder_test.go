@@ -2,7 +2,6 @@ package message
 
 import (
 	"go-moq/internal"
-	"go-moq/pkg/data"
 	"go-moq/pkg/model"
 
 	"reflect"
@@ -164,22 +163,22 @@ func TestEncodeExtensions(t *testing.T) {
 func TestEncodeObjectDatagram(t *testing.T) {
 	tests := []struct {
 		name     string
-		datagram *data.ObjectDatagram
+		datagram *model.ObjectDatagram
 		expected []byte
 	}{
 		{
 			name: "0x03 ObjectDatagram",
-			datagram: internal.Must(data.NewObjectDatagram(1, 2,
-				data.WithObjectId(12),
-				data.WithPublisherPriority(12),
-				data.WithExtensions(
+			datagram: internal.Must(model.NewObjectDatagram(1, 2,
+				model.WithObjectId(12),
+				model.WithPublisherPriority(12),
+				model.WithExtensions(
 					[]model.MoqtKeyValuePair{
 						internal.Must(model.NewMoqtKeyValuePair(10, uint64(11))),
 						internal.Must(model.NewMoqtKeyValuePair(21, []byte{0x00, 0x01})),
 					},
 				),
-				data.WithEndOfGroup(),
-				data.WithPayload(
+				model.WithEndOfGroup(),
+				model.WithPayload(
 					[]byte{
 						0x21, 0x22, 0x22, 0xFF,
 					},
@@ -226,13 +225,13 @@ func TestEncodeObjectDatagram(t *testing.T) {
 func TestEncodeSubgroupHeader(t *testing.T) {
 	tests := []struct {
 		name     string
-		sgh      *data.SubGroupHeader
+		sgh      *model.SubGroupHeader
 		expected []byte
 	}{
 		{
 			name: "Basic Subgroup Header (0x10)",
-			sgh: data.NewSubGroupHeader(1, 5,
-				data.SHWithPublisherPriority(8),
+			sgh: model.NewSubGroupHeader(1, 5,
+				model.SHWithPublisherPriority(8),
 			),
 			expected: []byte{
 				0x10, // Type
@@ -243,11 +242,11 @@ func TestEncodeSubgroupHeader(t *testing.T) {
 		},
 		{
 			name: "Subgroup Header with Extensions, EndOfGroup, Priority and SubgroupId (0x1D)",
-			sgh: data.NewSubGroupHeader(2, 5,
-				data.SHWithExtensions(),
-				data.SHWithSubgroupId(50),
-				data.SHWithEndOfGroup(),
-				data.SHWithPublisherPriority(10),
+			sgh: model.NewSubGroupHeader(2, 5,
+				model.SHWithExtensions(),
+				model.SHWithSubgroupId(50),
+				model.SHWithEndOfGroup(),
+				model.SHWithPublisherPriority(10),
 			),
 			expected: []byte{
 				0x1D, // Type (0b00011101)
@@ -274,12 +273,12 @@ func TestEncodeSubgroupHeader(t *testing.T) {
 func TestEncodeSubgroupObject(t *testing.T) {
 	tests := []struct {
 		name     string
-		sgo      *data.SubgroupObject
+		sgo      *model.SubgroupObject
 		expected []byte
 	}{
 		{
 			name: "Basic Subgroup Object - Payload",
-			sgo:  internal.Must(data.NewSubgroupObject(0, data.SOWithPayload([]byte{0x00, 0x01}))),
+			sgo:  internal.Must(model.NewSubgroupObject(0, model.SOWithPayload([]byte{0x00, 0x01}))),
 			expected: []byte{
 				0x00,       // ObjectIdDelta
 				0x02,       // PayloadLength
@@ -288,7 +287,7 @@ func TestEncodeSubgroupObject(t *testing.T) {
 		},
 		{
 			name: "Basic Subgroup Object - Status",
-			sgo:  internal.Must(data.NewSubgroupObject(0x01, data.SOWithStatus(model.Normal))),
+			sgo:  internal.Must(model.NewSubgroupObject(0x01, model.SOWithStatus(model.Normal))),
 			expected: []byte{
 				0x01, // ObjectIdDelta
 				0x00, // PayloadLength
@@ -297,9 +296,9 @@ func TestEncodeSubgroupObject(t *testing.T) {
 		},
 		{
 			name: "Payload Object With Extensions",
-			sgo: internal.Must(data.NewSubgroupObject(0x02,
-				data.SOWithPayload([]byte{0x00, 0x01}),
-				data.SOWithExtensions(
+			sgo: internal.Must(model.NewSubgroupObject(0x02,
+				model.SOWithPayload([]byte{0x00, 0x01}),
+				model.SOWithExtensions(
 					[]model.MoqtKeyValuePair{internal.Must(model.NewMoqtKeyValuePair(0, uint64(1)))},
 				),
 			)),
@@ -315,9 +314,9 @@ func TestEncodeSubgroupObject(t *testing.T) {
 		},
 		{
 			name: "Status Object (Normal 0x00) With Extensions",
-			sgo: internal.Must(data.NewSubgroupObject(0x03,
-				data.SOWithStatus(model.Normal),
-				data.SOWithExtensions(
+			sgo: internal.Must(model.NewSubgroupObject(0x03,
+				model.SOWithStatus(model.Normal),
+				model.SOWithExtensions(
 					[]model.MoqtKeyValuePair{internal.Must(model.NewMoqtKeyValuePair(0, uint64(1)))},
 				),
 			)),
@@ -465,12 +464,12 @@ func TestEncodeMoqtReasonPhrase(t *testing.T) {
 func TestEncodeSubscriptionFilter(t *testing.T) {
 	tests := []struct {
 		name     string
-		filter   *data.SubscriptionFilter
+		filter   *model.SubscriptionFilter
 		expected []byte
 	}{
 		{
-			name: "NextGroupStart Filter",
-			filter: data.NewNextGroupStartFilter(model.MoqtLocation{GroupId: 0x0, ObjectId: 0x0}),
+			name:   "NextGroupStart Filter",
+			filter: model.NewNextGroupStartFilter(model.MoqtLocation{GroupId: 0x0, ObjectId: 0x0}),
 			expected: []byte{
 				0x1, // Filter type
 				// start location not encoded (determined by publisher)
@@ -478,8 +477,8 @@ func TestEncodeSubscriptionFilter(t *testing.T) {
 			},
 		},
 		{
-			name: "LargestObject Filter",
-			filter: data.NewLargestObjectFilter(model.MoqtLocation{GroupId: 0x0, ObjectId: 0x0}),
+			name:   "LargestObject Filter",
+			filter: model.NewLargestObjectFilter(model.MoqtLocation{GroupId: 0x0, ObjectId: 0x0}),
 			expected: []byte{
 				0x2,
 				// start location not encoded (determined by publisher)
@@ -487,16 +486,16 @@ func TestEncodeSubscriptionFilter(t *testing.T) {
 			},
 		},
 		{
-			name: "AbsoluteStart Filter",
-			filter: data.NewAbsoluteStartFilter(model.MoqtLocation{GroupId: 0x0, ObjectId: 0x0}),
+			name:   "AbsoluteStart Filter",
+			filter: model.NewAbsoluteStartFilter(model.MoqtLocation{GroupId: 0x0, ObjectId: 0x0}),
 			expected: []byte{
 				0x3,
 				0x0, 0x0, // start location actually encoded
 			},
 		},
 		{
-			name: "AbsoluteRange Filter",
-			filter: internal.Must(data.NewAbsoluteRangeFilter(model.MoqtLocation{GroupId: 0x2, ObjectId: 0x0}, 0x5)),
+			name:   "AbsoluteRange Filter",
+			filter: internal.Must(model.NewAbsoluteRangeFilter(model.MoqtLocation{GroupId: 0x2, ObjectId: 0x0}, 0x5)),
 			expected: []byte{
 				0x4,
 				0x2, 0x0, // start location actually encoded
@@ -513,5 +512,5 @@ func TestEncodeSubscriptionFilter(t *testing.T) {
 				t.Errorf("EncodeSubscriptionFilter() got = %v, want %v", buf, tt.expected)
 			}
 		})
-	}	
+	}
 }

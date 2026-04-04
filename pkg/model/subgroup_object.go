@@ -1,8 +1,7 @@
-package data
+package model
 
 import (
 	"fmt"
-	"go-moq/pkg/model"
 
 	"github.com/LukaGiorgadze/gonull/v2"
 )
@@ -20,20 +19,20 @@ import (
 
 type SubgroupObject struct {
 	ObjectIdDelta uint64
-	Extensions    gonull.Nullable[[]model.MoqtKeyValuePair]
-	Status        gonull.Nullable[model.MoqtObjectStatus]
+	Extensions    gonull.Nullable[[]MoqtKeyValuePair]
+	Status        gonull.Nullable[MoqtObjectStatus]
 	Payload       gonull.Nullable[[]byte]
 }
 
 type SubgroupObjectOption func(*SubgroupObject)
 
-func SOWithExtensions(exts []model.MoqtKeyValuePair) SubgroupObjectOption { // Set extensions inside the subgroup object
+func SOWithExtensions(exts []MoqtKeyValuePair) SubgroupObjectOption { // Set extensions inside the subgroup object
 	return func(so *SubgroupObject) {
 		so.Extensions = gonull.NewNullable(exts)
 	}
 }
 
-func SOWithStatus(status model.MoqtObjectStatus) SubgroupObjectOption { // Set the status field for the subgroup object
+func SOWithStatus(status MoqtObjectStatus) SubgroupObjectOption { // Set the status field for the subgroup object
 	return func(so *SubgroupObject) {
 		so.Status = gonull.NewNullable(status)
 	}
@@ -66,7 +65,7 @@ func NewSubgroupObject(objectIdDelta uint64, opts ...SubgroupObjectOption) (*Sub
 		return nil, fmt.Errorf("either status or payload must be present")
 	}
 
-	if subgroupObject.Status.Valid && subgroupObject.Status.Val != model.Normal && subgroupObject.Extensions.Valid {
+	if subgroupObject.Status.Valid && subgroupObject.Status.Val != Normal && subgroupObject.Extensions.Valid {
 		return nil, fmt.Errorf("non-normal status objects cannot have extensions")
 	}
 
