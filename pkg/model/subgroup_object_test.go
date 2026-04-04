@@ -78,7 +78,7 @@ func TestNewSubgroupObject(t *testing.T){
 			expectErr: false,
 		},
 		{
-			name:          "Status object (Non-Normal) with extensions - Error",
+			name:          "Status object (Non-Normal) with non-empty extensions - Error",
 			objectIdDelta: 1,
 			opts: []SubgroupObjectOption{
 				SOWithStatus(EndOfGroup),
@@ -91,10 +91,10 @@ func TestNewSubgroupObject(t *testing.T){
 			expectErr: true,
 		},
 		{
-			name:          "Both status and payload given - Error",
+			name:          "Both non-normal status and payload given - Error",
 			objectIdDelta: 5,
 			opts: []SubgroupObjectOption{
-				SOWithStatus(Normal),
+				SOWithStatus(EndOfGroup),
 				SOWithPayload([]byte("data")),
 			},
 			expected:  nil,

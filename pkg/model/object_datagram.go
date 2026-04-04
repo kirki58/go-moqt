@@ -245,8 +245,8 @@ func NewObjectDatagram(trackAlias uint64, groupId uint64, opts ...ObjectDatagram
 	}
 
 	// Validate Rule 1
-	if dg.Status.Valid && dg.Payload.Valid {
-		return nil, fmt.Errorf("cannot have both status and payload")
+	if dg.Status.Valid && dg.Status.Val != Normal && dg.Payload.Valid {
+		return nil, fmt.Errorf("cannot have both non-normal status and payload")
 	}
 	if !dg.Status.Valid && !dg.Payload.Valid {
 		return nil, fmt.Errorf("either status or payload must be present")

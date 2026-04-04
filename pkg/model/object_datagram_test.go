@@ -81,7 +81,7 @@ func TestNewObjectDatagramType(t *testing.T) {
 			expectErr: false,
 		},
 		{
-			name:   "0x25 --> Priority present, Extensions present, With Statuss",
+			name:   "0x25 --> Priority present, Extensions present, With Status",
 			typeID: 0x25,
 			expected: &ObjectDatagramType{
 				TypeID:            0x25,
@@ -265,7 +265,7 @@ func TestNewObjectDatagram(t *testing.T) {
 		expected   *ObjectDatagram
 	}{
 		{
-			name:       "Error condition - both WithStatus and WithPayload options are passed, which defies the toggle logic",
+			name:       "Error condition - both non-normal WithStatus and WithPayload options are passed, which defies the toggle logic",
 			trackAlias: 0,
 			groupID:    0,
 			opts: []ObjectDatagramOption{

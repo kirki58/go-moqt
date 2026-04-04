@@ -52,21 +52,21 @@ func NewSubgroupObject(objectIdDelta uint64, opts ...SubgroupObjectOption) (*Sub
 	}
 
 	// Apply all options
-	for _, opt := range opts{
+	for _, opt := range opts {
 		opt(subgroupObject)
 	}
 
 	// Validate the rules
-	if subgroupObject.Status.Valid && subgroupObject.Payload.Valid {
-		return nil, fmt.Errorf("status and payload cannot both be present")
+	if subgroupObject.Status.Valid && subgroupObject.Status.Val != Normal && subgroupObject.Payload.Valid {
+		return nil, fmt.Errorf("non-normal status and payload cannot both be present")
 	}
 
 	if !subgroupObject.Status.Valid && !subgroupObject.Payload.Valid {
 		return nil, fmt.Errorf("either status or payload must be present")
 	}
 
-	if subgroupObject.Status.Valid && subgroupObject.Status.Val != Normal && subgroupObject.Extensions.Valid {
-		return nil, fmt.Errorf("non-normal status objects cannot have extensions")
+	if subgroupObject.Status.Valid && subgroupObject.Status.Val != Normal && subgroupObject.Extensions.Valid && len(subgroupObject.Extensions.Val) != 0 {
+		return nil, fmt.Errorf("non-normal status objects cannot have extensions (except when they are empty)")
 	}
 
 	return subgroupObject, nil

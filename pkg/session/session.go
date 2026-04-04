@@ -3,7 +3,6 @@ package session
 import (
 	"errors"
 	"fmt"
-	"go-moq/pkg/data"
 	"go-moq/pkg/model"
 	"go-moq/pkg/session/control"
 	"go-moq/pkg/transport"
@@ -126,7 +125,7 @@ type Session struct {
 	
 	Handlers map[control.ControlMessageType]Handler
 
-	Publisher *data.Publisher
+	Publisher *Publisher
 }
 
 // Checks for given error (unwraps wrapped errors sequentially with errors.As()), if it's a type of termination error it will terminate the session and the underlying transport
