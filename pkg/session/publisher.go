@@ -37,7 +37,7 @@ type Publisher struct {
 
 // For simplicity, it's assumed that each group will have only 1 subgroup, so a 1:1:1 mapping exists for group:subgroup:stream
 func (pub *Publisher) publishForSubscription(sub *Subscription) {
-	streamCount := uint64(0) // Number of opened streams
+	streamCount := uint64(0)  // Number of opened streams
 	latestGroup := ^uint64(0) // assign it to 11111.... (64) this will indicate a newly started stream
 	var latestStream transport.SendStream
 
@@ -63,11 +63,11 @@ func (pub *Publisher) publishForSubscription(sub *Subscription) {
 			if err != nil {
 				fmt.Printf("Failed to open stream for subscription %d, error: %v\n", sub.ID, err)
 				pub.cleanUpSubscription(sub, &control.PublishDoneMessage{
-					RequestId: sub.ID,
+					RequestId:   sub.ID,
 					StatusCode:  control.PublishDoneInternalError,
 					StreamCount: streamCount,
 					ErrorReason: model.NewReasonPhrase("Failed to open data stream"),
-				},latestStream)
+				}, latestStream)
 				return
 			}
 
@@ -86,11 +86,11 @@ func (pub *Publisher) publishForSubscription(sub *Subscription) {
 			if err != nil {
 				fmt.Printf("Failed to write subgroup header for subscription %d, Written %d bytes out of %d-length message ,error: %v\n", sub.ID, n, len(sghBuf), err)
 				pub.cleanUpSubscription(sub, &control.PublishDoneMessage{
-					RequestId: sub.ID,
+					RequestId:   sub.ID,
 					StatusCode:  control.PublishDoneInternalError,
 					StreamCount: streamCount,
 					ErrorReason: model.NewReasonPhrase("Failed to write data to stream"),
-				},latestStream)
+				}, latestStream)
 				return
 			}
 		}
@@ -109,11 +109,11 @@ func (pub *Publisher) publishForSubscription(sub *Subscription) {
 			// Dispatcher yielded a corrupt object, close dispatcher channel, remove subscription, close all ongoing streams, send PUBLISH_DONE
 			fmt.Printf("Dispatcher handed corrupt object for subscription with id: %d, error: %v\n", sub.ID, err)
 			pub.cleanUpSubscription(sub, &control.PublishDoneMessage{
-					RequestId: sub.ID,
-					StatusCode:  control.PublishDoneInternalError,
-					StreamCount: streamCount,
-					ErrorReason: model.NewReasonPhrase("Publisher's dispatcher handed corrupt object"),
-			},latestStream)
+				RequestId:   sub.ID,
+				StatusCode:  control.PublishDoneInternalError,
+				StreamCount: streamCount,
+				ErrorReason: model.NewReasonPhrase("Publisher's dispatcher handed corrupt object"),
+			}, latestStream)
 			return
 		}
 		var sgoBufArr [0]byte
@@ -124,11 +124,11 @@ func (pub *Publisher) publishForSubscription(sub *Subscription) {
 		if err != nil {
 			fmt.Printf("Failed to write subgroup object for subscription %d, Written %d bytes out of %d-length message ,error: %v\n", sub.ID, n, len(sgoBuf), err)
 			pub.cleanUpSubscription(sub, &control.PublishDoneMessage{
-				RequestId: sub.ID,
+				RequestId:   sub.ID,
 				StatusCode:  control.PublishDoneInternalError,
 				StreamCount: streamCount,
 				ErrorReason: model.NewReasonPhrase("Failed to write data to stream"),
-			},latestStream)
+			}, latestStream)
 			return
 		}
 	}
@@ -143,11 +143,11 @@ func (pub *Publisher) publishForSubscription(sub *Subscription) {
 	if err != nil {
 		fmt.Printf("Failed to open stream for subscription %d, error: %v\n", sub.ID, err)
 		pub.cleanUpSubscription(sub, &control.PublishDoneMessage{
-			RequestId: sub.ID,
+			RequestId:   sub.ID,
 			StatusCode:  control.PublishDoneInternalError,
 			StreamCount: streamCount,
 			ErrorReason: model.NewReasonPhrase("Failed to open stream"),
-		},latestStream)
+		}, latestStream)
 		return
 	}
 
@@ -164,11 +164,11 @@ func (pub *Publisher) publishForSubscription(sub *Subscription) {
 	if err != nil {
 		fmt.Printf("Failed to write subgroup header for subscription %d, Written %d bytes out of %d-length message ,error: %v\n", sub.ID, n, len(sghBuf), err)
 		pub.cleanUpSubscription(sub, &control.PublishDoneMessage{
-			RequestId: sub.ID,
+			RequestId:   sub.ID,
 			StatusCode:  control.PublishDoneInternalError,
 			StreamCount: streamCount,
 			ErrorReason: model.NewReasonPhrase("Failed to write data to stream"),
-		},latestStream)
+		}, latestStream)
 		return
 	}
 
@@ -182,21 +182,21 @@ func (pub *Publisher) publishForSubscription(sub *Subscription) {
 	n, err = latestStream.Write(sgoBuf)
 	if err != nil {
 		fmt.Printf("Failed to write subgroup object for subscription %d, Written %d bytes out of %d-length message ,error: %v\n", sub.ID, n, len(sgoBuf), err)
-			pub.cleanUpSubscription(sub, &control.PublishDoneMessage{
-			RequestId: sub.ID,
+		pub.cleanUpSubscription(sub, &control.PublishDoneMessage{
+			RequestId:   sub.ID,
 			StatusCode:  control.PublishDoneInternalError,
 			StreamCount: streamCount,
 			ErrorReason: model.NewReasonPhrase("Failed to write data to stream"),
-		},latestStream)
+		}, latestStream)
 		return
 	}
 
 	pub.cleanUpSubscription(sub, &control.PublishDoneMessage{
-		RequestId: sub.ID,
+		RequestId:   sub.ID,
 		StatusCode:  control.PublishDoneTrackEnded,
 		StreamCount: streamCount,
 		ErrorReason: model.NewReasonPhrase("No error - Track ended gracefully"),
-	},latestStream)
+	}, latestStream)
 }
 
 func (pub *Publisher) cleanUpSubscription(sub *Subscription, publishDone *control.PublishDoneMessage, latestStream transport.SendStream) {
@@ -205,7 +205,6 @@ func (pub *Publisher) cleanUpSubscription(sub *Subscription, publishDone *contro
 	// 2. Send a PUBLISH_DONE message
 	// 3. Remove the subscription from in-memory registry
 	sub.Dispatcher.Close(sub)
-	sub.DispatcherChannel = nil
 
 	switch publishDone.StatusCode {
 	case control.PublishDoneInternalError:
