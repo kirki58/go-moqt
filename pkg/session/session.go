@@ -115,6 +115,8 @@ func (state *SessionState) FromParams(params []model.MoqtKeyValuePair) {
 	}
 }
 
+// TODO: implement local request id incrementation while sending control messages
+
 type Session struct {
 	Conn          transport.MOQTConnection
 	ControlStream transport.Stream

@@ -6,9 +6,12 @@ import (
 	moqt "go-moq"
 	"go-moq/pkg/message"
 	"go-moq/pkg/model"
+	"go-moq/pkg/session/control"
 	"go-moq/pkg/transport"
 	"sync"
 	"time"
+
+	"github.com/quic-go/quic-go"
 )
 
 const openStreamTimeoutSecs = 5 * time.Second
@@ -34,6 +37,7 @@ type Publisher struct {
 
 // For simplicity, it's assumed that each group will have only 1 subgroup, so a 1:1:1 mapping exists for group:subgroup:stream
 func (pub *Publisher) publishForSubscription(sub *Subscription) {
+	streamCount := uint64(0) // Number of opened streams
 	latestGroup := ^uint64(0) // assign it to 11111.... (64) this will indicate a newly started stream
 	var latestStream transport.SendStream
 
@@ -58,14 +62,16 @@ func (pub *Publisher) publishForSubscription(sub *Subscription) {
 
 			if err != nil {
 				fmt.Printf("Failed to open stream for subscription %d, error: %v\n", sub.ID, err)
-				// For simplicity if open stream fails we terminate the subscription right now.
-				sub.Dispatcher.Close(sub) // Channel between publisher-subscriber closed
-				pub.removeSubscription(sub)
+				pub.cleanUpSubscription(sub, &control.PublishDoneMessage{
+					RequestId: sub.ID,
+					StatusCode:  control.PublishDoneInternalError,
+					StreamCount: streamCount,
+					ErrorReason: model.NewReasonPhrase("Failed to open data stream"),
+				},latestStream)
 				return
-				
-				// TODO: Send PublishDoneMessage with INTERNAL_ERROR Status code
-				// TODO: Close all streams
 			}
+
+			streamCount++
 
 			// Send subgroup header over the stream
 			// since this is a single-subgroup stream it's certain that end of group will be present in the stream
@@ -79,46 +85,51 @@ func (pub *Publisher) publishForSubscription(sub *Subscription) {
 
 			if err != nil {
 				fmt.Printf("Failed to write subgroup header for subscription %d, Written %d bytes out of %d-length message ,error: %v\n", sub.ID, n, len(sghBuf), err)
-				sub.Dispatcher.Close(sub) // Do not receive any more objects from the dispatcher
-				pub.removeSubscription(sub)
+				pub.cleanUpSubscription(sub, &control.PublishDoneMessage{
+					RequestId: sub.ID,
+					StatusCode:  control.PublishDoneInternalError,
+					StreamCount: streamCount,
+					ErrorReason: model.NewReasonPhrase("Failed to write data to stream"),
+				},latestStream)
 				return
-				// TODO: Send PublishDoneMessage with INTERNAL_ERROR Status code
-				// TODO: Close all streams
 			}
 		}
 
 		// send objects over latestStream
 		var objIdDelta uint64
-		if objIdTracker ==  ^uint64(0){
+		if objIdTracker == ^uint64(0) {
 			objIdDelta = obj.Location.ObjectId // 0
-		} else{
+		} else {
 			objIdDelta = obj.Location.ObjectId - objIdTracker - 1
 		}
 		objIdTracker = obj.Location.ObjectId
 
-
-
 		sgo, err := model.NewSubgroupObject(objIdDelta, model.SOWithPayload(obj.Payload), model.SOWithExtensions(obj.ExtensionHeaders), model.SOWithStatus(obj.ObjectStatus))
-		if err != nil{
+		if err != nil {
 			// Dispatcher yielded a corrupt object, close dispatcher channel, remove subscription, close all ongoing streams, send PUBLISH_DONE
-			sub.Dispatcher.Close(sub) // Do not receive any more objects from the dispatcher
-			pub.removeSubscription(sub)
+			fmt.Printf("Dispatcher handed corrupt object for subscription with id: %d, error: %v\n", sub.ID, err)
+			pub.cleanUpSubscription(sub, &control.PublishDoneMessage{
+					RequestId: sub.ID,
+					StatusCode:  control.PublishDoneInternalError,
+					StreamCount: streamCount,
+					ErrorReason: model.NewReasonPhrase("Publisher's dispatcher handed corrupt object"),
+			},latestStream)
 			return
-			// TODO: Send PublishDoneMessage with INTERNAL_ERROR Status code
-			// TODO: Close all streams
 		}
 		var sgoBufArr [0]byte
 		sgoBuf := sgoBufArr[:0]
-		
+
 		message.EncodeSubgroupObject(&sgoBuf, sgo)
 		n, err := latestStream.Write(sgoBuf)
 		if err != nil {
 			fmt.Printf("Failed to write subgroup object for subscription %d, Written %d bytes out of %d-length message ,error: %v\n", sub.ID, n, len(sgoBuf), err)
-			sub.Dispatcher.Close(sub) // Do not receive any more objects from the dispatcher
-			pub.removeSubscription(sub)
+			pub.cleanUpSubscription(sub, &control.PublishDoneMessage{
+				RequestId: sub.ID,
+				StatusCode:  control.PublishDoneInternalError,
+				StreamCount: streamCount,
+				ErrorReason: model.NewReasonPhrase("Failed to write data to stream"),
+			},latestStream)
 			return
-			// TODO: Send PublishDoneMessage with INTERNAL_ERROR Status code
-			// TODO: Close all streams
 		}
 	}
 
@@ -131,15 +142,16 @@ func (pub *Publisher) publishForSubscription(sub *Subscription) {
 
 	if err != nil {
 		fmt.Printf("Failed to open stream for subscription %d, error: %v\n", sub.ID, err)
-		// For simplicity if open stream fails we terminate the subscription right now.
-		sub.Dispatcher.Close(sub) // Channel between publisher-subscriber closed
-		pub.removeSubscription(sub)
+		pub.cleanUpSubscription(sub, &control.PublishDoneMessage{
+			RequestId: sub.ID,
+			StatusCode:  control.PublishDoneInternalError,
+			StreamCount: streamCount,
+			ErrorReason: model.NewReasonPhrase("Failed to open stream"),
+		},latestStream)
 		return
-		
-		// TODO: Send PublishDoneMessage with INTERNAL_ERROR Status code
-		// TODO: Close all streams
 	}
 
+	streamCount++
 	latestGroup++
 	// Send Subgroup Header
 	sgh := model.NewSubGroupHeader(sub.Alias, latestGroup, model.SHWithEndOfGroup(), model.SHWithPublisherPriority(255))
@@ -151,11 +163,13 @@ func (pub *Publisher) publishForSubscription(sub *Subscription) {
 
 	if err != nil {
 		fmt.Printf("Failed to write subgroup header for subscription %d, Written %d bytes out of %d-length message ,error: %v\n", sub.ID, n, len(sghBuf), err)
-		sub.Dispatcher.Close(sub) // Do not receive any more objects from the dispatcher
-		pub.removeSubscription(sub)
+		pub.cleanUpSubscription(sub, &control.PublishDoneMessage{
+			RequestId: sub.ID,
+			StatusCode:  control.PublishDoneInternalError,
+			StreamCount: streamCount,
+			ErrorReason: model.NewReasonPhrase("Failed to write data to stream"),
+		},latestStream)
 		return
-		// TODO: Send PublishDoneMessage with INTERNAL_ERROR Status code
-		// TODO: Close all streams
 	}
 
 	// Send EOT Object
@@ -163,22 +177,48 @@ func (pub *Publisher) publishForSubscription(sub *Subscription) {
 
 	var sgoBufArr [0]byte
 	sgoBuf := sgoBufArr[:0]
-	
+
 	message.EncodeSubgroupObject(&sgoBuf, eotObj)
 	n, err = latestStream.Write(sgoBuf)
 	if err != nil {
 		fmt.Printf("Failed to write subgroup object for subscription %d, Written %d bytes out of %d-length message ,error: %v\n", sub.ID, n, len(sgoBuf), err)
-		sub.Dispatcher.Close(sub) // Do not receive any more objects from the dispatcher
-		pub.removeSubscription(sub)
+			pub.cleanUpSubscription(sub, &control.PublishDoneMessage{
+			RequestId: sub.ID,
+			StatusCode:  control.PublishDoneInternalError,
+			StreamCount: streamCount,
+			ErrorReason: model.NewReasonPhrase("Failed to write data to stream"),
+		},latestStream)
 		return
-		// TODO: Send PublishDoneMessage with INTERNAL_ERROR Status code
-		// TODO: Close all streams
 	}
 
-	// TODO: Send PublishDoneMessage with TRACK_ENDED
+	pub.cleanUpSubscription(sub, &control.PublishDoneMessage{
+		RequestId: sub.ID,
+		StatusCode:  control.PublishDoneTrackEnded,
+		StreamCount: streamCount,
+		ErrorReason: model.NewReasonPhrase("No error - Track ended gracefully"),
+	},latestStream)
 }
 
-func (pub *Publisher) removeSubscription(sub *Subscription){
+func (pub *Publisher) cleanUpSubscription(sub *Subscription, publishDone *control.PublishDoneMessage, latestStream transport.SendStream) {
+	// 1. Close the Dispatcher channel and stop receiving any objects from it
+	// 2. Close latestStream
+	// 2. Send a PUBLISH_DONE message
+	// 3. Remove the subscription from in-memory registry
+	sub.Dispatcher.Close(sub)
+	sub.DispatcherChannel = nil
+
+	switch publishDone.StatusCode {
+	case control.PublishDoneInternalError:
+		latestStream.CancelWrite(quic.StreamErrorCode(quic.InternalError)) // Aborts the stream, no retransmission
+	case control.PublishDoneTrackEnded:
+		latestStream.Close() // Will receive on-fly objects or objects that needs retransmitting
+	}
+
+	pub.sess.Cmf.WriteControlMessage(publishDone)
+	pub.removeSubscription(sub)
+}
+
+func (pub *Publisher) removeSubscription(sub *Subscription) {
 	pub.SubInNamesMutex.Lock()
 	delete(pub.ActiveIncomingSubscriptionNames, sub.FullTrackName.ToString())
 	pub.SubInNamesMutex.Unlock()

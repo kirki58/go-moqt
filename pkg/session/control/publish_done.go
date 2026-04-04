@@ -34,7 +34,7 @@ func IsPublishDoneStatusCode(i uint64) bool {
 
 // TODO: Implement the message
 type PublishDoneMessage struct {
-	RequestId   uint64 // The Request ID of the SUBSCRIBE this message is replying to
+	RequestId   uint64 // The Request ID of the SUBSCRIBE being terminated
 	StatusCode  uint64
 	StreamCount uint64
 	ErrorReason model.MoqtReasonPhrase
@@ -42,6 +42,10 @@ type PublishDoneMessage struct {
 
 func (m *PublishDoneMessage) Type() ControlMessageType {
 	return PUBLISH_DONE
+}
+
+func (m *PublishDoneMessage) RequestID() (uint64, bool) {
+	return 0, false
 }
 
 func (m *PublishDoneMessage) Encode() ([]byte, error) {
