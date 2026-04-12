@@ -92,17 +92,17 @@ Loop: // label to be used for breaking the main loop
 				if obj.Location.GroupId > latestGroup {
 					latestStream.Close()
 					latestGroup = obj.Location.GroupId
-					objIdTracker = ^uint64(0) // reset the id tracker
 					if err := pub.startNewGroup(sub, latestStream, latestGroup, streamCount); err != nil {
 						fmt.Printf("%v", err)
 						return
 					}
 					streamCount++
 
-					if err := pub.sendSubgroupObject(sub, latestStream, obj, 0, streamCount); err != nil {
+					if err := pub.sendSubgroupObject(sub, latestStream, obj, obj.Location.ObjectId, streamCount); err != nil {
 						fmt.Printf("%v", err)
 						return
 					}
+					objIdTracker = obj.Location.ObjectId
 					break
 				}
 			}
