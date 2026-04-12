@@ -1,10 +1,9 @@
-package server
+package peer
 
 import (
 	"context"
 	"crypto/tls"
 	"fmt"
-	moqt "go-moq"
 	"go-moq/pkg/model"
 	"go-moq/pkg/session"
 	"go-moq/pkg/session/control"
@@ -23,13 +22,13 @@ const serverDefaultMaxLocalTokenCacheSize = 0
 const connMaxIdleTimeout = 60 * time.Second // terminate after 60 seconds of idle connection (no packets received)
 
 type Server struct {
-	TrackRegistry moqt.TrackRegistry
+	TrackRegistry *TrackRegistry
 	Addr          string        // Read-only for external code
 	Port          int           // Read-only for external code
 	Ready         chan struct{} // This channel will be closed when the server is ready to accept connections
 }
 
-func NewServer(trackRegistry moqt.TrackRegistry) *Server {
+func NewServer(trackRegistry *TrackRegistry) *Server {
 	return &Server{
 		TrackRegistry: trackRegistry,
 		Ready:         make(chan struct{}),

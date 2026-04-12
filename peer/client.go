@@ -1,10 +1,9 @@
-package client
+package peer
 
 import (
 	"context"
 	"crypto/tls"
 	"fmt"
-	moqt "go-moq"
 	"go-moq/pkg/model"
 	"go-moq/pkg/session"
 	"go-moq/pkg/session/control"
@@ -24,7 +23,7 @@ const connectionKeepAlivePeriod = 15 * time.Second // send PING frames every 15 
 // MOQT Client functionality
 
 type Client struct {
-	trackRegistry moqt.TrackRegistry
+	trackRegistry *TrackRegistry
 }
 
 // Establish a transport with the fiven URI
@@ -42,9 +41,9 @@ func (c *Client) Connect(ctx context.Context, uri string) (transport.MOQTConnect
 		}
 
 		quicConf := &quic.Config{
-			EnableDatagrams:       true,          // The QUIC Datagram extension MUST be supported. [Cite: Section 3.1]
-			MaxIncomingStreams:    1,             // Only 1 bidirectional stream allowed that is the control stream.
-			KeepAlivePeriod: connectionKeepAlivePeriod,
+			EnableDatagrams:    true, // The QUIC Datagram extension MUST be supported. [Cite: Section 3.1]
+			MaxIncomingStreams: 1,    // Only 1 bidirectional stream allowed that is the control stream.
+			KeepAlivePeriod:    connectionKeepAlivePeriod,
 		}
 
 		// 2. Dial the QUIC Connection

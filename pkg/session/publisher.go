@@ -3,7 +3,6 @@ package session
 import (
 	"context"
 	"fmt"
-	moqt "go-moq"
 	"go-moq/pkg/message"
 	"go-moq/pkg/model"
 	"go-moq/pkg/session/control"
@@ -21,8 +20,6 @@ const openStreamTimeoutSecs = 5 * time.Second
 type Publisher struct {
 	sess *Session // A reference to the session this publisher belongs to
 
-	TrackRegistry moqt.TrackRegistry
-
 	// Active Incoming Subscription by their Track alias
 	SubInAliasesMutex                 sync.Mutex
 	ActiveIncomingSubscriptionAliases map[uint64]*Subscription
@@ -33,6 +30,106 @@ type Publisher struct {
 
 	latestAliasMutex sync.Mutex
 	latestAlias      uint64
+}
+
+func (pub *Publisher) GetSubscriptionByName(ftn *model.MoqtFullTrackName) (*Subscription, bool) {
+	pub.SubInNamesMutex.Lock()
+	defer pub.SubInNamesMutex.Unlock()
+	sub, ok := pub.ActiveIncomingSubscriptionNames[ftn.ToString()]
+	return sub, ok
+}
+
+func (pub *Publisher) GetSubscriptionByAlias(alias uint64) (*Subscription, bool) {
+	pub.SubInAliasesMutex.Lock()
+	defer pub.SubInAliasesMutex.Unlock()
+	sub, ok := pub.ActiveIncomingSubscriptionAliases[alias]
+	return sub, ok
+}
+
+// Instantiates a subscription, returns it + the latest object location
+// Will also register the subscription to maps
+// returns ok if created registered sucessfully
+func (pub *Publisher) NewSubscription(reqId uint64, ftn *model.MoqtFullTrackName, filter model.SubscriptionFilter,
+	parameters []model.MoqtKeyValuePair, dispatcher *Dispatcher) (*Subscription, error) {
+	pub.latestAliasMutex.Lock()
+	trackAlias := pub.latestAlias
+	pub.latestAlias++
+	pub.latestAliasMutex.Unlock()
+
+	sub := &Subscription{
+		ID:            reqId,
+		Alias:         trackAlias,
+		FullTrackName: ftn,
+		Filter:        filter,
+		Status:        SubscriptionStatusEstablished,
+		Parameters:    parameters,
+		Publisher:     pub,
+		Dispatcher:    dispatcher,
+		// DispatcherChannel: dispatcherChan, // Must be assigned by the subscribe message handler
+		// DropChannel:       dropChannel,    // Likewise
+	}
+
+	pub.SubInNamesMutex.Lock()
+	pub.ActiveIncomingSubscriptionNames[ftn.ToString()] = sub
+	pub.SubInNamesMutex.Unlock()
+
+	pub.SubInAliasesMutex.Lock()
+	pub.ActiveIncomingSubscriptionAliases[trackAlias] = sub
+	pub.SubInAliasesMutex.Unlock()
+
+	return sub, nil
+}
+
+// will return false if track is over before reading a single object (extremely unlikely)
+func (pub *Publisher) LargestObjectLocation(sub *Subscription) (*model.MoqtLocation, bool) {
+	largestObj, ok := <-sub.DispatcherChannel
+	if !ok {
+		pub.cleanUpSubscription(sub, &control.PublishDoneMessage{
+			RequestId:   sub.ID,
+			StatusCode:  control.PublishDoneTrackEnded,
+			StreamCount: 0,
+			ErrorReason: model.NewReasonPhrase("No error - Track ended gracefully"),
+		}, nil)
+		return nil, false
+	}
+	return &largestObj.Location, true
+}
+
+// returns false when trying to read closed dispatcher channel (means track is over before joining)
+func (pub *Publisher) JoinEstablishedSubscription(sub *Subscription) error {
+	// Note: Only NextGroupStart join is implemented for now.
+	switch sub.Filter.FilterType {
+	case model.NextGroupStart:
+		// Wait for next group start to join
+		latestObj := <-sub.DispatcherChannel
+		latestGroup := latestObj.Location.GroupId
+
+		for {
+			obj, ok := <-sub.DispatcherChannel
+			if !ok {
+				pub.cleanUpSubscription(sub, &control.PublishDoneMessage{
+					RequestId:   sub.ID,
+					StatusCode:  control.PublishDoneTrackEnded,
+					StreamCount: 0,
+					ErrorReason: model.NewReasonPhrase("No error - Track ended gracefully"),
+				}, nil)
+				return fmt.Errorf("Track ended while waiting for next group start")
+			}
+
+			if obj.Location.GroupId > latestGroup { // reached the next group, we can join now
+				go pub.publishForSubscription(sub) // start streaming to this subscription in a separate goroutine
+				return nil                         // sucessfully joined
+			}
+		}
+	default:
+		pub.cleanUpSubscription(sub, &control.PublishDoneMessage{
+			RequestId:   sub.ID,
+			StatusCode:  control.PublishDoneInternalError,
+			StreamCount: 0,
+			ErrorReason: model.NewReasonPhrase("Unsupported subscription filter type"),
+		}, nil)
+		return fmt.Errorf("Unsupported subscription filter type: %d\n", sub.Filter.FilterType)
+	}
 }
 
 // For simplicity, it's assumed that each group will have only 1 subgroup, so a 1:1:1 mapping exists for group:subgroup:stream
@@ -98,6 +195,7 @@ Loop: // label to be used for breaking the main loop
 					}
 					streamCount++
 
+					// Since this is the first object, it's certain we are going to use it's object id as objIdDelta
 					if err := pub.sendSubgroupObject(sub, latestStream, obj, obj.Location.ObjectId, streamCount); err != nil {
 						fmt.Printf("%v", err)
 						return
@@ -236,11 +334,13 @@ func (pub *Publisher) cleanUpSubscription(sub *Subscription, publishDone *contro
 	// 3. Remove the subscription from in-memory registry
 	sub.Dispatcher.Close(sub)
 
-	switch publishDone.StatusCode {
-	case control.PublishDoneInternalError:
-		latestStream.CancelWrite(quic.StreamErrorCode(quic.InternalError)) // Aborts the stream, no retransmission
-	case control.PublishDoneTrackEnded:
-		latestStream.Close() // Will receive on-fly objects or objects that needs retransmitting
+	if latestStream != nil {
+		switch publishDone.StatusCode {
+		case control.PublishDoneInternalError:
+			latestStream.CancelWrite(quic.StreamErrorCode(quic.InternalError)) // Aborts the stream, no retransmission
+		case control.PublishDoneTrackEnded:
+			latestStream.Close() // Will receive on-fly objects or objects that needs retransmitting
+		}
 	}
 
 	pub.sess.Cmf.WriteControlMessage(publishDone)
@@ -256,72 +356,3 @@ func (pub *Publisher) removeSubscription(sub *Subscription) {
 	delete(pub.ActiveIncomingSubscriptionAliases, sub.Alias)
 	pub.SubInAliasesMutex.Unlock()
 }
-
-// Instantiates a subscription, returns it + the latest object location
-// returns ok if joined sucessfully, otherwise (with very small probability of happening) the track is over and it's dispatcher channel is closed
-
-// Will also register the subscription to maps
-func (pub *Publisher) NewSubscription(reqId uint64, ftn *model.MoqtFullTrackName, filter model.SubscriptionFilter,
-	parameters []model.MoqtKeyValuePair, dispatcherChan <-chan *model.MoqtObject) (*Subscription, *model.MoqtLocation, bool) {
-	pub.latestAliasMutex.Lock()
-	trackAlias := pub.latestAlias
-	pub.latestAlias++
-	pub.latestAliasMutex.Unlock()
-
-	sub := &Subscription{
-		ID:                reqId,
-		Alias:             trackAlias,
-		FullTrackName:     ftn,
-		Filter:            filter,
-		Status:            SubscriptionStatusEstablished,
-		Parameters:        parameters,
-		DispatcherChannel: dispatcherChan, // Must be created by the subscribe message handler
-	}
-
-	// Get the latest object for the subscription's track and return its location
-	latestObj, ok := <-sub.DispatcherChannel
-	if !ok {
-		sub.Status = SubscriptionStatusTerminated
-		return sub, nil, false
-	}
-
-	pub.SubInNamesMutex.Lock()
-	pub.ActiveIncomingSubscriptionNames[ftn.ToString()] = sub
-	pub.SubInNamesMutex.Unlock()
-
-	pub.SubInAliasesMutex.Lock()
-	pub.ActiveIncomingSubscriptionAliases[trackAlias] = sub
-	pub.SubInAliasesMutex.Unlock()
-
-	return sub, &latestObj.Location, true
-}
-
-// returns false when trying to read closed dispatcher channel (means track is over before joining)
-func (pub *Publisher) JoinEstablishedSubscription(sub *Subscription) bool {
-	// Note: Only NextGroupStart join is implemented for now.
-	switch sub.Filter.FilterType {
-	case model.NextGroupStart:
-		// Wait for next group start to join
-		latestObj := <-sub.DispatcherChannel
-		latestGroup := latestObj.Location.GroupId
-
-		for {
-			obj, ok := <-sub.DispatcherChannel
-			if !ok {
-				return false
-			}
-
-			if obj.Location.GroupId > latestGroup { // reached the next group, we can join now
-				go pub.publishForSubscription(sub) // this will block until the track ends
-				return true                        // sucessfully joined
-			}
-		}
-	default:
-		return false
-	}
-
-}
-
-// func (pub *Publisher) HandleDrop(loc model.MoqtLocation, isGroupStart bool){
-
-// }

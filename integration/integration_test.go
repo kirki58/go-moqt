@@ -3,10 +3,10 @@ package integration_test
 import (
 	"context"
 	"fmt"
+	"go-moq/peer"
 	"go-moq/pkg/model"
 	"go-moq/pkg/session"
 	"go-moq/pkg/session/control"
-	"go-moq/server"
 	"testing"
 	"time"
 
@@ -18,7 +18,7 @@ var maxIncomingReqIdClient uint64 = 100
 func Test_Integration(t *testing.T) {
 	defer goleak.VerifyNone(t)
 
-	srv := server.NewServer(nil)
+	srv := peer.NewServer(nil)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -64,7 +64,7 @@ func Test_Integration(t *testing.T) {
 				RequestId: 1,
 				FullTrackName: &model.MoqtFullTrackName{
 					Namespace: [][]byte{[]byte("test")},
-					Name: []byte("track"),
+					Name:      []byte("track"),
 				},
 				Parameters: []model.MoqtKeyValuePair{},
 			}

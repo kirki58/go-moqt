@@ -3,19 +3,18 @@ package integration_test
 import (
 	"context"
 	"fmt"
-	"go-moq/client"
 	"go-moq/internal"
+	"go-moq/peer"
 	"go-moq/pkg/model"
 	"go-moq/pkg/session"
 	"go-moq/pkg/session/control"
 	"go-moq/pkg/transport"
-	"go-moq/server"
 	"log"
 	"testing"
 	"time"
 )
 
-func runServerOverQUIC(ctx context.Context, srv *server.Server, addr string){
+func runServerOverQUIC(ctx context.Context, srv *peer.Server, addr string) {
 	connsCh := make(chan transport.MOQTConnection, 100) // 100 connections can handshake at the same time without blocking the accepting of the new connections.
 
 	// ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM) // real-world implementations would use this context
@@ -59,41 +58,41 @@ func runServerOverQUIC(ctx context.Context, srv *server.Server, addr string){
 	}
 }
 
-func setupSession(t *testing.T, srv *server.Server) (*session.Session){
-		// Spin up a client
-		client := client.Client{}
-		bkgCtx := context.Background()
-		dialCtx, dialCancel := context.WithTimeout(bkgCtx, 5*time.Second)
-		defer dialCancel()
+func setupSession(t *testing.T, srv *peer.Server) *session.Session {
+	// Spin up a client
+	client := peer.Client{}
+	bkgCtx := context.Background()
+	dialCtx, dialCancel := context.WithTimeout(bkgCtx, 5*time.Second)
+	defer dialCancel()
 
-		conn, err := client.Connect(dialCtx, fmt.Sprintf("moqt://localhost:%d", srv.Port))
+	conn, err := client.Connect(dialCtx, fmt.Sprintf("moqt://localhost:%d", srv.Port))
 
-		// ASSERTION 1: Should successfully connect in the provided happy path
-		if err != nil {
-			t.Fatalf("Client Failed to connect to MoQT server at %s: %v", srv.Addr, err)
-		}
+	// ASSERTION 1: Should successfully connect in the provided happy path
+	if err != nil {
+		t.Fatalf("Client Failed to connect to MoQT server at %s: %v", srv.Addr, err)
+	}
 
-		// Client initiates an handshake
-		sessInitCtx, sessInitCancel := context.WithTimeout(bkgCtx, 20 *time.Second) // Ping frames are sent every 15 seconds, so 20 sec max for session init is ideal
-		defer sessInitCancel()
+	// Client initiates an handshake
+	sessInitCtx, sessInitCancel := context.WithTimeout(bkgCtx, 20*time.Second) // Ping frames are sent every 15 seconds, so 20 sec max for session init is ideal
+	defer sessInitCancel()
 
-		sess, err := client.InitiateSession(sessInitCtx, conn, []model.MoqtKeyValuePair{ // this is the client's view of the session
-			internal.Must(model.NewMoqtKeyValuePair(control.SetupParamMaxRequestID, maxIncomingReqIdClient)),
-		})
+	sess, err := client.InitiateSession(sessInitCtx, conn, []model.MoqtKeyValuePair{ // this is the client's view of the session
+		internal.Must(model.NewMoqtKeyValuePair(control.SetupParamMaxRequestID, maxIncomingReqIdClient)),
+	})
 
-		// Assertion 2: Should successfully complete the handshake
-		if err != nil {
-			t.Fatalf("Client failed to initiate session: %v", err)
-		}
+	// Assertion 2: Should successfully complete the handshake
+	if err != nil {
+		t.Fatalf("Client failed to initiate session: %v", err)
+	}
 
-		if sess == nil {
-			t.Fatal("Session is nil after successful initiation")
-		}
+	if sess == nil {
+		t.Fatal("Session is nil after successful initiation")
+	}
 
-		// Assertion 3: Verify session state
-		if sess.State.MaxOutgoingRequestID != 100 {
-			t.Errorf("Expected MaxOutgoingRequestId %d, got %d", maxIncomingReqIdClient, sess.State.MaxOutgoingRequestID)
-		}
+	// Assertion 3: Verify session state
+	if sess.State.MaxOutgoingRequestID != 100 {
+		t.Errorf("Expected MaxOutgoingRequestId %d, got %d", maxIncomingReqIdClient, sess.State.MaxOutgoingRequestID)
+	}
 
-		return sess
+	return sess
 }

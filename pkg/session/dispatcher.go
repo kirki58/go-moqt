@@ -14,7 +14,7 @@ type Dispatcher struct {
 	SubDropChannels map[*Subscription]chan<- struct{}          // Non-buffered notification channel, dispatcher uses this to inform the publisher that it needs to drop some objects
 }
 
-// Dispatch this object to all publishers over channels
+// Dispatch this object to all publishers over channels (used by the encoder)
 func (d *Dispatcher) Dispatch(obj *model.MoqtObject, isGroupStart bool) {
 	for sub, ch := range d.SubChannels {
 		// Send the object to the publisher's channel
@@ -33,6 +33,24 @@ func (d *Dispatcher) Dispatch(obj *model.MoqtObject, isGroupStart bool) {
 			continue
 		}
 	}
+}
+
+// Create and register send channels, return their receive counterparts
+func (d *Dispatcher) RegisterNewSubChannel(sub *Subscription, bufSize uint) (<-chan *model.MoqtObject, <-chan struct{}) {
+	// Note: channel directions will implicitly convert, no worries!
+
+	// Create a buffered channel for objects
+	// and a size-1 channel for drop notifications to the publisher
+	objCh := make(chan *model.MoqtObject, bufSize)
+	dropCh := make(chan struct{}, 1)
+
+	// Register the channels in the dispatcher
+	d.SubChannelsMu.Lock()
+	defer d.SubChannelsMu.Unlock()
+	d.SubChannels[sub] = objCh
+	d.SubDropChannels[sub] = dropCh
+
+	return objCh, dropCh
 }
 
 // Publisher decided to close it's channel received an unsubscribe, publisher's remote peer terminated the transport connectic etc.
