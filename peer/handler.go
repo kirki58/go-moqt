@@ -18,12 +18,6 @@ func (s *Server) HandleSubscribe(sess *session.Session, msg control.ControlMessa
 		return fmt.Errorf("expected SubscribeMessage, got %T", msg)
 	}
 
-	// Since this is a request initiating control message we MUST validate and increment the next expected requestid from the peer
-	// This may result in a session termination
-	if err := sess.ValidateAndIncrementIncomingRequestId(subMsg.RequestId); err != nil {
-		return err
-	}
-
 	// Check if the TrackRegistry has the requested track
 	if subMsg.FullTrackName == nil {
 		return fmt.Errorf("[DEBUG] Received subscribe message with nil FullTrackName for message with Request ID: %d\n", subMsg.RequestId)
@@ -73,7 +67,7 @@ func (s *Server) HandleSubscribe(sess *session.Session, msg control.ControlMessa
 			subFilter, n, err := message.DecodeSubscriptionFilter(subMsg.Parameters[i].ValueBytes)
 			filter = *subFilter
 			if err != nil{
-				return fmt.Errorf("Failed to parse subscription filter after parsing %d bytes, error: %v", n, err) // might or might not be a termination error, RunControlLoop will act accordingly.
+				return fmt.Errorf("Failed to parse subscription filter after parsing %d bytes, error: %w", n, err) // might or might not be a termination error, RunControlLoop will act accordingly.
 			}
 		}
 	}
@@ -125,7 +119,7 @@ func (s *Server) HandleSubscribe(sess *session.Session, msg control.ControlMessa
 	}
 
 	if err := sess.Publisher.JoinEstablishedSubscription(sub); err != nil{
-		return fmt.Errorf("Failed to establish subscription after sending SUBSCRIBE_OK message, error: %v", err)
+		return fmt.Errorf("Failed to establish subscription after sending SUBSCRIBE_OK message, error: %w", err)
 	}
 
 	return nil

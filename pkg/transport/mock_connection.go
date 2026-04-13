@@ -1,8 +1,7 @@
-package mocks
+package transport
 
 import (
 	"context"
-	"go-moq/pkg/transport"
 )
 
 type MockMOQTConnection struct {
@@ -22,12 +21,12 @@ func (m *MockMOQTConnection) CloseWithError(code uint64, msg string) error {
     return m.CloseWithErrorReturn
 }
 
-func (m *MockMOQTConnection) OpenStream() (transport.Stream, error) { return nil, nil }
-func (m *MockMOQTConnection) OpenStreamSync(ctx context.Context) (transport.Stream, error) { return nil, nil }
-func (m *MockMOQTConnection) OpenUniStream() (transport.SendStream, error) { return nil, nil }
-func (m *MockMOQTConnection) OpenUniStreamSync(ctx context.Context) (transport.SendStream, error) { return nil, nil }
-func (m *MockMOQTConnection) AcceptStream(ctx context.Context) (transport.Stream, error) { return nil, nil }
-func (m *MockMOQTConnection) AcceptUniStream(ctx context.Context) (transport.ReceiveStream, error) { return nil, nil }
+func (m *MockMOQTConnection) OpenStream() (Stream, error) { return nil, nil }
+func (m *MockMOQTConnection) OpenStreamSync(ctx context.Context) (Stream, error) { return nil, nil }
+func (m *MockMOQTConnection) OpenUniStream() (SendStream, error) { return nil, nil }
+func (m *MockMOQTConnection) OpenUniStreamSync(ctx context.Context) (SendStream, error) { return nil, nil }
+func (m *MockMOQTConnection) AcceptStream(ctx context.Context) (Stream, error) { return nil, nil }
+func (m *MockMOQTConnection) AcceptUniStream(ctx context.Context) (ReceiveStream, error) { return nil, nil }
 func (m *MockMOQTConnection) IsWebTransport() bool { return false }
 func (m *MockMOQTConnection) Context() context.Context { return context.Background() }
 func (m *MockMOQTConnection) RemoteHost() string { return "" }

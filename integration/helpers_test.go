@@ -48,6 +48,9 @@ func runServerOverQUIC(ctx context.Context, srv *peer.Server, addr string) {
 				return
 			}
 			fmt.Printf("Session initiated with %s\n", sess.Conn.RemoteHost())
+			
+			// Register SUBSCRIBE message handler for server's session
+			sess.RegisterHandler(control.SUBSCRIBE, session.SubscribeHandler(srv.HandleSubscribe))
 
 			// Control loop and data loop needs to inherently respect sess.Conn.Context
 			// Run control loop

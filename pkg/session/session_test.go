@@ -1,8 +1,8 @@
 package session
 
 import (
-	"go-moq/internal/mocks"
 	"go-moq/pkg/model"
+	"go-moq/pkg/transport"
 
 	"testing"
 )
@@ -34,7 +34,7 @@ func TestTerminateIfTerminationError(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			s := &Session{
-				Conn: &mocks.MockMOQTConnection{CloseWithErrorReturn: nil},
+				Conn: &transport.MockMOQTConnection{CloseWithErrorReturn: nil},
 			}
 			didTerminate := s.TerminateIfTerminationError(tt.err)
 			if didTerminate != tt.terminated {

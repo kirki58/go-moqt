@@ -130,6 +130,7 @@ func (s *Server) InitateSession(ctx context.Context, conn transport.MOQTConnecti
 		Cmf:           control.NewControlMessageFactory(stream),
 		Handlers:      make(map[control.ControlMessageType]session.Handler),
 	}
+	sess.Publisher = session.NewPublisher(sess)
 
 	err = s.performHandshake(ctx, sess, setupParams)
 	if err != nil {

@@ -14,8 +14,16 @@ type Dispatcher struct {
 	SubDropChannels map[*Subscription]chan<- struct{}          // Non-buffered notification channel, dispatcher uses this to inform the publisher that it needs to drop some objects
 }
 
+func NewDispatcher(ftn *model.MoqtFullTrackName) (*Dispatcher){
+	return &Dispatcher{
+		FullTrackName: ftn,
+		SubChannels: make(map[*Subscription]chan<- *model.MoqtObject),
+		SubDropChannels: make(map[*Subscription]chan<- struct{}),
+	}
+}
+
 // Dispatch this object to all publishers over channels (used by the encoder)
-func (d *Dispatcher) Dispatch(obj *model.MoqtObject, isGroupStart bool) {
+func (d *Dispatcher) Dispatch(obj *model.MoqtObject) {
 	for sub, ch := range d.SubChannels {
 		// Send the object to the publisher's channel
 		select {

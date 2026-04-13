@@ -32,6 +32,15 @@ type Publisher struct {
 	latestAlias      uint64
 }
 
+func NewPublisher(sess *Session) *Publisher{
+	return &Publisher{
+		sess: sess,
+		ActiveIncomingSubscriptionAliases: make(map[uint64]*Subscription),
+		ActiveIncomingSubscriptionNames: make(map[string]*Subscription),
+		latestAlias: 0,
+	}
+}
+
 func (pub *Publisher) GetSubscriptionByName(ftn *model.MoqtFullTrackName) (*Subscription, bool) {
 	pub.SubInNamesMutex.Lock()
 	defer pub.SubInNamesMutex.Unlock()
@@ -117,6 +126,7 @@ func (pub *Publisher) JoinEstablishedSubscription(sub *Subscription) error {
 			}
 
 			if obj.Location.GroupId > latestGroup { // reached the next group, we can join now
+				sub.Filter.StartLocation = model.MoqtLocation{GroupId: obj.Location.GroupId, ObjectId: obj.Location.ObjectId}
 				go pub.publishForSubscription(sub) // start streaming to this subscription in a separate goroutine
 				return nil                         // sucessfully joined
 			}
@@ -238,7 +248,7 @@ func (pub *Publisher) startNewGroup(sub *Subscription, latestStream transport.Se
 			StreamCount: streamCount,
 			ErrorReason: model.NewReasonPhrase("Failed to open data stream"),
 		}, latestStream)
-		return fmt.Errorf("Failed to open stream for subscription %d, error: %v\n", sub.ID, err)
+		return fmt.Errorf("Failed to open stream for subscription %d, error: %w\n", sub.ID, err)
 	}
 
 	// Send subgroup header over the stream
@@ -258,7 +268,7 @@ func (pub *Publisher) startNewGroup(sub *Subscription, latestStream transport.Se
 			StreamCount: streamCount,
 			ErrorReason: model.NewReasonPhrase("Failed to write data to stream"),
 		}, latestStream)
-		return fmt.Errorf("Failed to write subgroup header for subscription %d, Written %d bytes out of %d-length message ,error: %v\n", sub.ID, n, len(sghBuf), err)
+		return fmt.Errorf("Failed to write subgroup header for subscription %d, Written %d bytes out of %d-length message ,error: %w\n", sub.ID, n, len(sghBuf), err)
 	}
 	return nil
 }
@@ -277,7 +287,7 @@ func (pub *Publisher) sendSubgroupObject(sub *Subscription, latestStream transpo
 			StreamCount: streamCount,
 			ErrorReason: model.NewReasonPhrase("Publisher's dispatcher handed corrupt object"),
 		}, latestStream)
-		return fmt.Errorf("Dispatcher handed corrupt object for subscription with id: %d, error: %v\n", sub.ID, err)
+		return fmt.Errorf("Dispatcher handed corrupt object for subscription with id: %d, error: %w\n", sub.ID, err)
 	}
 	var sgoBufArr [0]byte
 	sgoBuf := sgoBufArr[:0]
@@ -291,7 +301,7 @@ func (pub *Publisher) sendSubgroupObject(sub *Subscription, latestStream transpo
 			StreamCount: streamCount,
 			ErrorReason: model.NewReasonPhrase("Failed to write data to stream"),
 		}, latestStream)
-		return fmt.Errorf("Failed to write subgroup object for subscription %d, Written %d bytes out of %d-length message ,error: %v\n", sub.ID, n, len(sgoBuf), err)
+		return fmt.Errorf("Failed to write subgroup object for subscription %d, Written %d bytes out of %d-length message ,error: %w\n", sub.ID, n, len(sgoBuf), err)
 	}
 	return nil
 }
@@ -314,7 +324,7 @@ func (pub *Publisher) sendEndOfTrackObject(sub *Subscription, latestStream trans
 			StreamCount: streamCount,
 			ErrorReason: model.NewReasonPhrase("Failed to write data to stream"),
 		}, latestStream)
-		return fmt.Errorf("Failed to write subgroup object for subscription %d, Written %d bytes out of %d-length message ,error: %v\n", sub.ID, n, len(sgoBuf), err)
+		return fmt.Errorf("Failed to write subgroup object for subscription %d, Written %d bytes out of %d-length message ,error: %w\n", sub.ID, n, len(sgoBuf), err)
 	}
 
 	pub.cleanUpSubscription(sub, &control.PublishDoneMessage{

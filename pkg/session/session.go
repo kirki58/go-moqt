@@ -90,6 +90,11 @@ func NewSessionState(localRole Role, maxIncomingRequestId uint64, localTokenCach
 		MaxIncomingRequestID:  maxIncomingRequestId,
 		LocalTokenCacheSize:   localTokenCacheSize,
 	}
+	if localRole == RoleServer {
+		state.NextIncomingRequestID = 0
+	} else if localRole == RoleClient{
+		state.NextIncomingRequestID = 1
+	}
 	return state
 }
 
@@ -224,7 +229,7 @@ func (sess *Session) RunControlLoop() {
 	}
 }
 
-// Validate the request id upon receiving request initiator control messages
+// Validate the request id upon receiving request initiator control messages TODO: Fix this function
 func (sess *Session) ValidateAndIncrementIncomingRequestId(reqId uint64) error {
 	sess.State.RequestIDMutex.Lock()
 	defer sess.State.RequestIDMutex.Unlock()
