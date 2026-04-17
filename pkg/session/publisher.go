@@ -32,12 +32,12 @@ type Publisher struct {
 	latestAlias      uint64
 }
 
-func NewPublisher(sess *Session) *Publisher{
+func NewPublisher(sess *Session) *Publisher {
 	return &Publisher{
-		sess: sess,
+		sess:                              sess,
 		ActiveIncomingSubscriptionAliases: make(map[uint64]*Subscription),
-		ActiveIncomingSubscriptionNames: make(map[string]*Subscription),
-		latestAlias: 0,
+		ActiveIncomingSubscriptionNames:   make(map[string]*Subscription),
+		latestAlias:                       0,
 	}
 }
 
@@ -59,7 +59,7 @@ func (pub *Publisher) GetSubscriptionByAlias(alias uint64) (*Subscription, bool)
 // Will also register the subscription to maps
 // returns ok if created registered sucessfully
 func (pub *Publisher) NewSubscription(reqId uint64, ftn *model.MoqtFullTrackName, filter model.SubscriptionFilter,
-	parameters []model.MoqtKeyValuePair, dispatcher *Dispatcher) (*Subscription, error) {
+	parameters []model.MoqtKeyValuePair, dispatcher *Dispatcher) *Subscription {
 	pub.latestAliasMutex.Lock()
 	trackAlias := pub.latestAlias
 	pub.latestAlias++
@@ -86,7 +86,7 @@ func (pub *Publisher) NewSubscription(reqId uint64, ftn *model.MoqtFullTrackName
 	pub.ActiveIncomingSubscriptionAliases[trackAlias] = sub
 	pub.SubInAliasesMutex.Unlock()
 
-	return sub, nil
+	return sub
 }
 
 // will return false if track is over before reading a single object (extremely unlikely)
@@ -127,8 +127,19 @@ func (pub *Publisher) JoinEstablishedSubscription(sub *Subscription) error {
 
 			if obj.Location.GroupId > latestGroup { // reached the next group, we can join now
 				sub.Filter.StartLocation = model.MoqtLocation{GroupId: obj.Location.GroupId, ObjectId: obj.Location.ObjectId}
-				go pub.publishForSubscription(sub) // start streaming to this subscription in a separate goroutine
-				return nil                         // sucessfully joined
+				// Open a new stream, send subgroup header, send the first object
+				stream, err := pub.startNewGroup(sub, obj.Location.GroupId, 0)
+				if err != nil {
+					return fmt.Errorf("Failed to start new group for subscription %d, error: %w\n", sub.ID, err)
+				}
+
+				err = pub.sendSubgroupObject(sub, stream, obj, obj.Location.ObjectId, 1)
+				if err != nil {
+					return fmt.Errorf("Failed to send first object for subscription %d, error: %w\n", sub.ID, err)
+				}
+
+				go pub.publishForSubscription(sub, obj.Location, stream) // start streaming to this subscription in a separate goroutine
+				return nil                                               // sucessfully joined
 			}
 		}
 	default:
@@ -143,15 +154,16 @@ func (pub *Publisher) JoinEstablishedSubscription(sub *Subscription) error {
 }
 
 // For simplicity, it's assumed that each group will have only 1 subgroup, so a 1:1:1 mapping exists for group:subgroup:stream
-func (pub *Publisher) publishForSubscription(sub *Subscription) {
-	streamCount := uint64(0)  // Number of opened streams
-	latestGroup := ^uint64(0) // assign it to 11111.... (64) this will indicate a newly started stream
-	var latestStream transport.SendStream
+func (pub *Publisher) publishForSubscription(sub *Subscription, startLoc model.MoqtLocation, startStream transport.SendStream) {
+	streamCount := uint64(0) // Number of opened streams
+	latestGroup := startLoc.GroupId
+	latestStream := startStream
 
 	// Needed to calculate ObjectIdDelta
 	// If it's a recently-joined stream or a newly opened stream (head of group) it is -1
 	// Otherwise it is the Object id of the object previous to the one in the below loop
-	objIdTracker := ^uint64(0) // assign it to 11111....
+	latestObjectId := startLoc.ObjectId
+	newGroupFirstObjectSentYet := true
 
 	// Listen to sub.DispatcherChannel until it's open (breaks out when channel is closed by the dispatcher)
 Loop: // label to be used for breaking the main loop
@@ -161,27 +173,29 @@ Loop: // label to be used for breaking the main loop
 			if !ok { // channel is closed, track is over
 				break Loop
 			}
-			if obj.Location.GroupId > latestGroup || latestGroup == ^uint64(0) { // group boundary reached, FIN the previous stream, open a new stream
-				if latestGroup != ^uint64(0) { // Not recently joined so there is a previous stream
-					latestStream.Close()
-				}
+			if obj.Location.GroupId > latestGroup { // group boundary reached, FIN the previous stream, open a new stream
+				latestStream.Close()
 				latestGroup = obj.Location.GroupId
-				objIdTracker = ^uint64(0) // reset the id tracker
-				if err := pub.startNewGroup(sub, latestStream, latestGroup, streamCount); err != nil {
+
+				str, err := pub.startNewGroup(sub, latestGroup, streamCount)
+				latestStream = str
+				if err != nil {
 					fmt.Printf("%v", err)
 					return
 				}
 				streamCount++
+				newGroupFirstObjectSentYet = false
 			}
 
 			// send objects over latestStream
 			var objIdDelta uint64
-			if objIdTracker == ^uint64(0) {
-				objIdDelta = obj.Location.ObjectId // 0
+			if !newGroupFirstObjectSentYet {
+				objIdDelta = obj.Location.ObjectId // delta should be the object id of the First object in the group
 			} else {
-				objIdDelta = obj.Location.ObjectId - objIdTracker - 1
+				objIdDelta = obj.Location.ObjectId - latestObjectId - 1
 			}
-			objIdTracker = obj.Location.ObjectId
+			latestObjectId = obj.Location.ObjectId
+			newGroupFirstObjectSentYet = true
 
 			if err := pub.sendSubgroupObject(sub, latestStream, obj, objIdDelta, streamCount); err != nil {
 				fmt.Printf("%v", err)
@@ -199,7 +213,11 @@ Loop: // label to be used for breaking the main loop
 				if obj.Location.GroupId > latestGroup {
 					latestStream.Close()
 					latestGroup = obj.Location.GroupId
-					if err := pub.startNewGroup(sub, latestStream, latestGroup, streamCount); err != nil {
+
+					str, err := pub.startNewGroup(sub, latestGroup, streamCount)
+					latestStream = str
+
+					if err != nil {
 						fmt.Printf("%v", err)
 						return
 					}
@@ -210,7 +228,8 @@ Loop: // label to be used for breaking the main loop
 						fmt.Printf("%v", err)
 						return
 					}
-					objIdTracker = obj.Location.ObjectId
+					latestObjectId = obj.Location.ObjectId
+					newGroupFirstObjectSentYet = true
 					break
 				}
 			}
@@ -220,7 +239,11 @@ Loop: // label to be used for breaking the main loop
 	// track is over send an end of track object in a new group
 	latestStream.Close() // close the last group's stream
 	latestGroup++        // note: ^uint64(0) + 1 = 0, so if the dispatcher channel is somehow closed before sending any objects EOT object is sent in group 0
-	if err := pub.startNewGroup(sub, latestStream, latestGroup, streamCount); err != nil {
+
+	str, err := pub.startNewGroup(sub, latestGroup, streamCount)
+	latestStream = str
+
+	if err != nil {
 		fmt.Printf("%v", err)
 		return
 	}
@@ -235,7 +258,7 @@ Loop: // label to be used for breaking the main loop
 // Before calling: increment latestGroup, close latestStream
 // After calling: increment stream counter, check for errors
 // internally terminates subscriptions for fatal errors
-func (pub *Publisher) startNewGroup(sub *Subscription, latestStream transport.SendStream, latestGroup uint64, streamCount uint64) error {
+func (pub *Publisher) startNewGroup(sub *Subscription, latestGroup uint64, streamCount uint64) (transport.SendStream, error) {
 	// open a new stream
 	ctx, cancel := context.WithTimeout(pub.sess.Conn.Context(), openStreamTimeoutSecs)
 	defer cancel()
@@ -248,15 +271,14 @@ func (pub *Publisher) startNewGroup(sub *Subscription, latestStream transport.Se
 			StreamCount: streamCount,
 			ErrorReason: model.NewReasonPhrase("Failed to open data stream"),
 		}, latestStream)
-		return fmt.Errorf("Failed to open stream for subscription %d, error: %w\n", sub.ID, err)
+		return nil, fmt.Errorf("Failed to open stream for subscription %d, error: %w\n", sub.ID, err)
 	}
 
 	// Send subgroup header over the stream
 	// since this is a single-subgroup stream it's certain that end of group will be present in the stream
 	// Extensions are present for every subgroup object within this stream, those who have no metadata to transmit MUST set their extensions length to 0
 	sgh := model.NewSubGroupHeader(sub.Alias, latestGroup, model.SHWithEndOfGroup(), model.SHWithExtensions(), model.SHWithPublisherPriority(128))
-	var sghBufArr [128]byte
-	sghBuf := sghBufArr[:0] // Create a slice backed by the stack array
+	var sghBuf []byte
 
 	message.EncodeSubgroupHeader(&sghBuf, sgh)
 	n, err := latestStream.Write(sghBuf) // TODO: Might implement a timeout context wrapper for this line??
@@ -268,9 +290,9 @@ func (pub *Publisher) startNewGroup(sub *Subscription, latestStream transport.Se
 			StreamCount: streamCount,
 			ErrorReason: model.NewReasonPhrase("Failed to write data to stream"),
 		}, latestStream)
-		return fmt.Errorf("Failed to write subgroup header for subscription %d, Written %d bytes out of %d-length message ,error: %w\n", sub.ID, n, len(sghBuf), err)
+		return nil, fmt.Errorf("Failed to write subgroup header for subscription %d, Written %d bytes out of %d-length message ,error: %w\n", sub.ID, n, len(sghBuf), err)
 	}
-	return nil
+	return latestStream, nil
 }
 
 // Before calling this function, calculate object id delta.
@@ -289,8 +311,7 @@ func (pub *Publisher) sendSubgroupObject(sub *Subscription, latestStream transpo
 		}, latestStream)
 		return fmt.Errorf("Dispatcher handed corrupt object for subscription with id: %d, error: %w\n", sub.ID, err)
 	}
-	var sgoBufArr [0]byte
-	sgoBuf := sgoBufArr[:0]
+	var sgoBuf []byte
 
 	message.EncodeSubgroupObject(&sgoBuf, sgo)
 	n, err := latestStream.Write(sgoBuf)
@@ -312,13 +333,12 @@ func (pub *Publisher) sendSubgroupObject(sub *Subscription, latestStream transpo
 func (pub *Publisher) sendEndOfTrackObject(sub *Subscription, latestStream transport.SendStream, streamCount uint64) error {
 	eotObj, _ := model.NewSubgroupObject(0, model.SOWithStatus(model.EndOfTrack))
 
-	var sgoBufArr [0]byte
-	sgoBuf := sgoBufArr[:0]
+	var sgoBuf []byte
 
 	message.EncodeSubgroupObject(&sgoBuf, eotObj)
 	n, err := latestStream.Write(sgoBuf)
 	if err != nil {
-		pub.cleanUpSubscription(sub, &control.PublishDoneMessage{
+		pub.cleanUpSubscriptionGracefully(sub, &control.PublishDoneMessage{
 			RequestId:   sub.ID,
 			StatusCode:  control.PublishDoneInternalError,
 			StreamCount: streamCount,
@@ -327,7 +347,7 @@ func (pub *Publisher) sendEndOfTrackObject(sub *Subscription, latestStream trans
 		return fmt.Errorf("Failed to write subgroup object for subscription %d, Written %d bytes out of %d-length message ,error: %w\n", sub.ID, n, len(sgoBuf), err)
 	}
 
-	pub.cleanUpSubscription(sub, &control.PublishDoneMessage{
+	pub.cleanUpSubscriptionGracefully(sub, &control.PublishDoneMessage{
 		RequestId:   sub.ID,
 		StatusCode:  control.PublishDoneTrackEnded,
 		StreamCount: streamCount,
@@ -335,6 +355,23 @@ func (pub *Publisher) sendEndOfTrackObject(sub *Subscription, latestStream trans
 	}, latestStream)
 
 	return nil
+}
+
+// Used when track is over, does not try to close dispatcher channels
+func (pub *Publisher) cleanUpSubscriptionGracefully(sub *Subscription, publishDone *control.PublishDoneMessage, latestStream transport.SendStream) {
+	// 1. Close latestStream
+	// 2. Send a PUBLISH_DONE message
+	// 3. Remove the subscription from in-memory registry
+	if latestStream != nil {
+		switch publishDone.StatusCode {
+		case control.PublishDoneInternalError:
+			latestStream.CancelWrite(quic.StreamErrorCode(quic.InternalError)) // Aborts the stream, no retransmission
+		case control.PublishDoneTrackEnded:
+			latestStream.Close() // Will receive on-fly objects or objects that needs retransmitting
+		}
+	}
+	pub.sess.Cmf.WriteControlMessage(publishDone)
+	pub.removeSubscription(sub)
 }
 
 func (pub *Publisher) cleanUpSubscription(sub *Subscription, publishDone *control.PublishDoneMessage, latestStream transport.SendStream) {

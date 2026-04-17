@@ -28,9 +28,16 @@ type Subscription struct {
 
 	Parameters []model.MoqtKeyValuePair
 
+	// Publisher owned
 	Publisher         *Publisher               // Publisher for this subscription
 	Dispatcher        *Dispatcher              // the track dispatcher this subscription was issued for
 	DispatcherChannel <-chan *model.MoqtObject // The channel publisher use to receive objects from subscribed track's object dispatcher It's important that this is a buffered channel
 	DropChannel       <-chan struct{}          // Publisher gets notified on this channel by the dispatcher that it needs to drop some objects from the DispatcherChannel
-	// Note: closing this channel is the responsibility of the
+	// Note: Dispatcher owns these channels, and it should close them
+
+	// Subscriber owned
+	ObjectSendChannel chan<- *model.MoqtObject
+
+	// Decoder owned
+	ObjectReceiveChannel <-chan *model.MoqtObject
 }

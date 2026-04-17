@@ -20,8 +20,8 @@ type Handler interface {
 	Handle(sess *Session, msg control.ControlMessage) error
 }
 
-type SubscribeHandler func(sess *Session, msg control.ControlMessage) error
+type MessageHandler func(sess *Session, msg control.ControlMessage) error
 
-func (f SubscribeHandler) Handle(sess *Session, msg control.ControlMessage) error {
+func (f MessageHandler) Handle(sess *Session, msg control.ControlMessage) error {
 	return f(sess, msg)
 }

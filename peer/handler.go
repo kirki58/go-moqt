@@ -90,10 +90,7 @@ func (s *Server) HandleSubscribe(sess *session.Session, msg control.ControlMessa
 
 	// Create and establish the subscription
 	// Register subscription
-	sub, err := sess.Publisher.NewSubscription(subMsg.RequestId, subMsg.FullTrackName, filter, subMsg.Parameters, disp)
-	if err != nil {
-		return err
-	}
+	sub := sess.Publisher.NewSubscription(subMsg.RequestId, subMsg.FullTrackName, filter, subMsg.Parameters, disp)
 
 	objBufCh, dropNotCh := disp.RegisterNewSubChannel(sub, OBJ_BUF_SIZE)
 	sub.DispatcherChannel = objBufCh
@@ -122,5 +119,83 @@ func (s *Server) HandleSubscribe(sess *session.Session, msg control.ControlMessa
 		return fmt.Errorf("Failed to establish subscription after sending SUBSCRIBE_OK message, error: %w", err)
 	}
 
+	return nil
+}
+
+func (c *Client) HandleSubscribeOk(sess *session.Session, msg control.ControlMessage) error{
+	subOkMsg, ok := msg.(*control.SubscribeOkMessage)
+	if !ok{
+		return fmt.Errorf("expected SubscribeOkMessage, got %T", msg)
+	}
+
+	// The identifer used for this track in Subgroups or Datagrams (see Section 10.1). The same Track Alias MUST NOT be used to refer to two different Tracks simultaneously.
+	// If a subscriber receives a SUBSCRIBE_OK that uses the same Track Alias as a different track with an Established subscription, it MUST close the session with error DUPLICATE_TRACK_ALIAS.
+
+	_ , ok = sess.Subscriber.GetSubscriptionByAlias(subOkMsg.TrackAlias)
+	if ok{ // subscription already exists
+		err := &model.MOQT_SESSION_TERMINATION_ERROR{
+			ErrorCode: model.MOQT_SESSION_TERMINATION_ERROR_CODE_DUPLICATE_TRACK_ALIAS,
+			ReasonPhrase: model.MoqtReasonPhrase(fmt.Sprintf("Subscriber received a SUBSCRIBE_OK for existing subscription to track alias %d", subOkMsg.TrackAlias)),
+		}
+		return err
+	}
+
+	// Look for largest object parameter
+	var didFindOne bool
+	var largestObj model.MoqtLocation
+	for i := 0; i < len(subOkMsg.Parameters); i++ {
+		if subOkMsg.Parameters[i].Type == control.ParamLargestObject {
+			if didFindOne { // A duplicate provided, it's a protocol violation
+				err := &model.MOQT_SESSION_TERMINATION_ERROR{
+					ErrorCode:    model.MOQT_SESSION_TERMINATION_ERROR_CODE_PROTOCOL_VIOLATION,
+					ReasonPhrase: model.MoqtReasonPhrase(fmt.Sprintf("Multiple Largest Object parameters found in SUBSCRIBE_OK message for subscription with request id %d, Protocol violation!", subOkMsg.RequestId)),
+				}
+				return err
+			}
+			didFindOne = true
+			largest, n, err := message.DecodeMoqtLocation(subOkMsg.Parameters[i].ValueBytes)
+			largestObj = largest
+			if err != nil{
+				return fmt.Errorf("Failed to parse largest object parameter after parsing %d bytes, error: %w", n, err) // might or might not be a termination error, RunControlLoop will act accordingly.
+			}
+		}
+	}
+
+	if !didFindOne{
+		err := &model.MOQT_SESSION_TERMINATION_ERROR{
+			ErrorCode: model.MOQT_SESSION_TERMINATION_ERROR_CODE_INTERNAL_ERROR,
+			ReasonPhrase: model.MoqtReasonPhrase("This implementation expects LARGEST_OBJECT parameter in SUBSCRIBE_OK messages"),
+		}
+		return err
+	}
+
+	err := sess.Subscriber.ActivateSubscription(subOkMsg.RequestId, subOkMsg.TrackAlias, largestObj)
+	if err != nil{
+		return fmt.Errorf("SUBSCRIBE_OK handler could not activate pending subscription created by SUBSCRIBE message with request id: %d, error: %w", subOkMsg.RequestId, err)
+	}
+
+	return nil
+}
+
+func (c *Client) HandlePublishDone(sess *session.Session, msg control.ControlMessage) error{
+	pubDoneMsg, ok := msg.(*control.PublishDoneMessage)
+	if !ok{
+		return fmt.Errorf("Expected PublishDoneMessage, got %T\n", msg)
+	}
+
+	sess.Subscriber.TerminateSubscription(pubDoneMsg.RequestId)
+
+	fmt.Printf("Subscription ended with stream count %d, Reason: [%d], %v", pubDoneMsg.StreamCount, pubDoneMsg.StatusCode, pubDoneMsg.ErrorReason)
+	return nil
+}
+
+func (c *Client) HandleRequestError(sess *session.Session, msg control.ControlMessage) error{
+	reqErrMsg, ok := msg.(*control.RequestErrorMessage)
+	if !ok {
+		return fmt.Errorf("Expected RequestErrorMessage, got %T\n", msg)
+	}
+
+	fmt.Printf("Received Request Error for Request ID: %d, Error Code: %d, Reason: %s\n", reqErrMsg.RequestId, reqErrMsg.ErrorCode, reqErrMsg.ErrorReason)
+	sess.Subscriber.CancelPendingSubscription(reqErrMsg.RequestId)
 	return nil
 }

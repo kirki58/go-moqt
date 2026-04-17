@@ -87,7 +87,9 @@ func (c *Client) InitiateSession(ctx context.Context, conn transport.MOQTConnect
 		Conn:          conn,
 		ControlStream: s,
 		Cmf:           control.NewControlMessageFactory(s),
+		Handlers: make(map[control.ControlMessageType]session.Handler),
 	}
+	sess.Subscriber = session.NewSubscriber(sess)
 
 	err = c.performHandshake(ctx, sess, setupParams)
 	if err != nil {

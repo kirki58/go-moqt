@@ -92,7 +92,7 @@ func NewSessionState(localRole Role, maxIncomingRequestId uint64, localTokenCach
 	}
 	if localRole == RoleServer {
 		state.NextIncomingRequestID = 0
-	} else if localRole == RoleClient{
+	} else if localRole == RoleClient {
 		state.NextIncomingRequestID = 1
 	}
 	return state
@@ -129,10 +129,12 @@ type Session struct {
 	Cmf *control.ControlMessageFactory // This is so that the session is able to read and write control messages
 
 	State *SessionState
-	
+
 	Handlers map[control.ControlMessageType]Handler
 
 	Publisher *Publisher
+
+	Subscriber *Subscriber
 }
 
 // Checks for given error (unwraps wrapped errors sequentially with errors.As()), if it's a type of termination error it will terminate the session and the underlying transport
@@ -160,7 +162,7 @@ func (sess *Session) RunControlLoop() {
 	// Act upon the control message type and contents
 
 	for {
-		select{
+		select {
 		case <-sess.Conn.Context().Done(): // The underlying connection got closed
 			fmt.Printf("Session control loop exiting because connection context is done for session with peer %s\n", sess.Conn.RemoteHost())
 			return
@@ -188,7 +190,7 @@ func (sess *Session) RunControlLoop() {
 			// PUBLISH
 			// TRACK_STATUS
 			// PUBLISH_NAMESPACE
-			// SUBSCRIBE_NAMESPACE 
+			// SUBSCRIBE_NAMESPACE
 			// SUBSCRIBE_UPDATE
 
 			// Perform sequential validation for request-initiating messages
@@ -206,7 +208,7 @@ func (sess *Session) RunControlLoop() {
 			// Note: sess.Handlers doesnt utilize Mutex since it is assumed that all handlers are registered before execution of RunControlLoop goroutine.
 			// After that sess.Handlers is basically read-only by the single RunControlLoop goroutine in the session so we shouldn't have any issues
 			// Thus, It should go without saying that a peer MUST register all needed handlers before running the control loop.
-			if !ok {                                  // Message type is not supported by the peer
+			if !ok { // Message type is not supported by the peer
 				// INTERNAL_ERROR termination error because the received control message is unsupported
 				err := &model.MOQT_SESSION_TERMINATION_ERROR{
 					ErrorCode:    model.MOQT_SESSION_TERMINATION_ERROR_CODE_INTERNAL_ERROR,
@@ -239,7 +241,7 @@ func (sess *Session) ValidateAndIncrementIncomingRequestId(reqId uint64) error {
 	// If we are the server, we expect even request ids from the client
 	// if we are the client we expect odd request ids from the server
 
-	if reqId != sess.State.NextIncomingRequestID{
+	if reqId != sess.State.NextIncomingRequestID {
 		return &model.MOQT_SESSION_TERMINATION_ERROR{
 			ErrorCode:    model.MOQT_SESSION_TERMINATION_ERROR_CODE_INVALID_REQUEST_ID,
 			ReasonPhrase: model.NewReasonPhrase(fmt.Sprintf("Request ID %d does not match expected NextIncomingRequestID %d", reqId, sess.State.NextIncomingRequestID)),
@@ -259,26 +261,3 @@ func (sess *Session) ValidateAndIncrementIncomingRequestId(reqId uint64) error {
 
 	return nil
 }
-
-// func (sess *Session) SendObjectDatagram(obj *data.ObjectDatagram) error {
-// 	dgBuf := make([]byte, 0, 256) // Initial capacity of 256 bytes
-
-// 	message.EncodeObjectDatagram(&dgBuf, obj)
-
-// 	return sess.Conn.SendDatagram(dgBuf)
-// }
-
-// func (sess *Session) ReceiveObjectDatagram(ctx context.Context) (*data.ObjectDatagram, error) {
-// 	msgBytes, err := sess.Conn.ReceiveDatagram(ctx)
-// 	if err != nil {
-// 		return nil, err
-// 	}
-
-// 	objDg, _, err := message.DecodeObjectDatagram(msgBytes)
-
-// 	if err != nil {
-// 		return nil, err
-// 	}
-
-// 	return objDg, nil
-// }

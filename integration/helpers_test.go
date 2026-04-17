@@ -50,7 +50,7 @@ func runServerOverQUIC(ctx context.Context, srv *peer.Server, addr string) {
 			fmt.Printf("Session initiated with %s\n", sess.Conn.RemoteHost())
 			
 			// Register SUBSCRIBE message handler for server's session
-			sess.RegisterHandler(control.SUBSCRIBE, session.SubscribeHandler(srv.HandleSubscribe))
+			sess.RegisterHandler(control.SUBSCRIBE, session.MessageHandler(srv.HandleSubscribe))
 
 			// Control loop and data loop needs to inherently respect sess.Conn.Context
 			// Run control loop
@@ -96,6 +96,13 @@ func setupSession(t *testing.T, srv *peer.Server) *session.Session {
 	if sess.State.MaxOutgoingRequestID != 100 {
 		t.Errorf("Expected MaxOutgoingRequestId %d, got %d", maxIncomingReqIdClient, sess.State.MaxOutgoingRequestID)
 	}
+
+	fmt.Printf("[CLIENT] Session sucessfully initiated with %s\n", sess.Conn.RemoteHost())
+
+	// Register SUBSCRIBE_OK message handler
+	sess.RegisterHandler(control.SUBSCRIBE_OK, session.MessageHandler(client.HandleSubscribeOk))
+	go sess.RunControlLoop()
+	go sess.Subscriber.ListenAndRedispatch()
 
 	return sess
 }

@@ -73,3 +73,19 @@ func (d *Dispatcher) Close(sub *Subscription) {
 	delete(d.SubDropChannels, sub)
 	close(dropCh)
 }
+
+// Used by the encoder when track is over
+func (d *Dispatcher) CloseAll(){
+	d.SubChannelsMu.Lock()
+	defer d.SubChannelsMu.Unlock()
+
+	for sub, ch := range d.SubChannels {
+		close(ch)
+		delete(d.SubChannels, sub)
+	}
+
+	for sub, dropCh := range d.SubDropChannels {
+		close(dropCh)
+		delete(d.SubDropChannels, sub)
+	}	
+}
