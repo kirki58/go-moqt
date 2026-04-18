@@ -140,6 +140,8 @@ func (cmf *ControlMessageFactory) ReadControlMessage() (ControlMessage, error) {
 
 	case uint64(REQUEST_ERROR):
 		msg = &RequestErrorMessage{}
+	case uint64(PUBLISH_DONE):
+		msg = &PublishDoneMessage{}
 
 	// TODO: More control messages as we go
 	default:

@@ -235,18 +235,26 @@ func (s *Subscriber) redispatchForStream(ctx context.Context, rStream transport.
 				streamGroup = sgh.GroupId
 				alias := sgh.TrackAlias
 
-				deadline := time.Now().Add(waitForAliasTimeout)
-
 				var sub *Subscription = nil
-				for time.Now().Before(deadline){
-					s.SubOutAliasesMutex.Lock()
-					active, ok := s.ActiveOutgoingSubscriptionAliases[alias]
-					s.SubOutAliasesMutex.Unlock()
-					if ok{
-						sub = active
-						break
+				waitCtx, waitCancel := context.WithTimeout(ctx, waitForAliasTimeout)
+				ticker := time.NewTicker(10 * time.Millisecond)
+			waitLoop:
+				for {
+					select {
+					case <-waitCtx.Done():
+						break waitLoop
+					case <-ticker.C:
+						s.SubOutAliasesMutex.Lock()
+						active, ok := s.ActiveOutgoingSubscriptionAliases[alias]
+						s.SubOutAliasesMutex.Unlock()
+						if ok {
+							sub = active
+							break waitLoop
+						}
 					}
 				}
+				ticker.Stop()
+				waitCancel()
 
 				if sub == nil{
 					fmt.Printf("Received subgroup header for track alias %d which doesn't match any active subscription aliases, abandoning stream\n", alias)
@@ -276,6 +284,7 @@ func (s *Subscriber) redispatchForStream(ctx context.Context, rStream transport.
 
 				// check for end of track object
 				if sgo.Status.Valid && sgo.Status.Val == model.EndOfTrack {
+					// PUBLISH_DONE handler should clean up the subscription after this.
 					return
 				}
 
@@ -325,11 +334,12 @@ func (s *Subscriber) redispatchForStream(ctx context.Context, rStream transport.
 					Payload:                    sgo.Payload.Val,
 				}
 				
-				pushCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
-				defer cancel()
+				pushCtx, pushCancel := context.WithTimeout(ctx, 5*time.Second)
 				select {
 				case forSub.ObjectSendChannel <- obj:
+					pushCancel()
 				case <-pushCtx.Done():
+					pushCancel()
 					fmt.Printf("Timeout pushing object to ObjectSourceChannel for track %s\n", ftnStr)
 					return
 				}

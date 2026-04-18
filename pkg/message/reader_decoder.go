@@ -21,11 +21,17 @@ import (
 func DecodeExtensionsFromReader(br *bufio.Reader) ([]model.MoqtKeyValuePair, error) {
 	extensionsLen, err := quicvarint.Read(br)
 	if err != nil {
+		if err == io.EOF{
+			return nil, err
+		}
 		return nil, fmt.Errorf("DecodeExtensions: failed to read Extension Headers Length: %w", err)
 	}
 
 	b := make([]byte, extensionsLen)
 	if n, err := io.ReadFull(br, b); err != nil{
+		if err == io.EOF{
+			return nil, err
+		}
 		return nil, fmt.Errorf("DecodeExtensions: failed to read Extension Headers, expected %d bytes, got %d: %w", extensionsLen, n, err)
 	} 
 
@@ -59,7 +65,7 @@ func DecodeExtensionsFromReader(br *bufio.Reader) ([]model.MoqtKeyValuePair, err
 func DecodeSubgroupObjectFromReader(br *bufio.Reader, subgroupHeaderType *model.SubGroupHeaderType) (*model.SubgroupObject, error) {
 	objectIdDelta, err := quicvarint.Read(br) // First varint is objectid delta
 	if err != nil {
-		if err == io.EOF{ // We can be sure the rest of the object exists and the stream is not ended before receiving the rest ob the object fields
+		if err == io.EOF{
 			return nil, err
 		}
 		return nil, fmt.Errorf("DecodeSubgroupObject: failed to read Object ID Delta: %w", err)
@@ -72,6 +78,9 @@ func DecodeSubgroupObjectFromReader(br *bufio.Reader, subgroupHeaderType *model.
 	if subgroupHeaderType.ExtensionsPresent {
 		ext, err := DecodeExtensionsFromReader(br)
 		if err != nil {
+			if err == io.EOF{
+				return nil, err
+			}
 			return nil, fmt.Errorf("DecodeSubgroupObject: failed to read Extensions: %w", err)
 		}
 
@@ -85,12 +94,18 @@ func DecodeSubgroupObjectFromReader(br *bufio.Reader, subgroupHeaderType *model.
 
 	objPayloadLen, err := quicvarint.Read(br)
 	if err != nil {
+		if err == io.EOF{
+			return nil, err
+		}
 		return nil, fmt.Errorf("DecodeSubgroupObject: failed to read Object Payload Length: %w", err)
 	}
 
 	if objPayloadLen == 0 { // we are looking at a status object
 		statusRead, err := quicvarint.Read(br)
 		if err != nil {
+			if err == io.EOF{
+				return nil, err
+			}
 			return nil, fmt.Errorf("DecodeSubgroupObject: failed to read Object Status: %w", err)
 		}
 
@@ -112,6 +127,9 @@ func DecodeSubgroupObjectFromReader(br *bufio.Reader, subgroupHeaderType *model.
 	} else { // we are looking at a payload object
 		payload := make([]byte, objPayloadLen)
 		if n, err := io.ReadFull(br, payload); err != nil{
+			if err == io.EOF{
+				return nil, err
+			}
 			return nil, fmt.Errorf("DecodeSubgroupObject: failed to read Object Payload, expected %d bytes, got %d: %w", objPayloadLen, n, err)
 		}
 

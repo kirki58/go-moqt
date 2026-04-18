@@ -2,6 +2,7 @@ package integration_test
 
 import (
 	"context"
+	"fmt"
 	"go-moq/h264"
 	"go-moq/internal"
 	"go-moq/peer"
@@ -9,8 +10,11 @@ import (
 	"go-moq/pkg/model"
 	"go-moq/pkg/session"
 	"go-moq/pkg/session/control"
+	"iter"
 	"testing"
 	"time"
+
+	"go.uber.org/goleak"
 )
 
 var maxIncomingReqIdClient uint64 = 100
@@ -18,7 +22,7 @@ var seed1, seed2 uint64 = 2, 4
 var trackSize, groupSize uint16 = 1800, 60
 
 func Test_Integration(t *testing.T) {
-	// defer goleak.VerifyNone(t)
+	defer goleak.VerifyNone(t)
 
 	// Create server and manage it's tracks
 	srv := peer.NewServer(peer.NewTrackRegistry())
@@ -83,55 +87,105 @@ func Test_Integration(t *testing.T) {
 			}
 
 			t.Run("AfterSubscribeOk_StartReceivingObjects", func(t *testing.T) {
+				var firstObjectLoc model.MoqtLocation
 				t.Run("FirstObjectReceived_IsGroupStart", func(t *testing.T) {
 					select {
 					case obj := <-sub.ObjectReceiveChannel:
 						if obj.Location.ObjectId != 0 {
 							t.Errorf("Expected first object to have ObjectId 0 (NextGroupStart), got %d", obj.Location.ObjectId)
 						}
+						firstObjectLoc = obj.Location
 					case <-time.After(5 * time.Second):
 						t.Fatal("Timed out waiting for the first object from the subscriber channel")
 					}
 				})
+
+				expectedLocs := enc.ExpectedLocationsAfter(firstObjectLoc)
+				next, stop := iter.Pull(expectedLocs)
+				defer stop()
+				expectedCount := enc.ExpectedObjectCountAfter(firstObjectLoc)
+				currentCount := uint16(0)
+				dropsCount := 0
+
+				// We expect to receive until end of track
+			Loop:
+				for {
+					select {
+					case obj, ok := <-sub.ObjectReceiveChannel:
+						if !ok { // EOT, subscription terminated
+							break Loop
+						}
+						fmt.Printf("Received object with location %v\n", obj.Location)
+						expected, _ := next()
+						if obj.Location != expected {
+							// If not next group start (which is the publisher's drop behaviour it's a failure)
+							if !(obj.Location.ObjectId == 0) {
+								t.Errorf("Received object with location %v, but expected location was %v", obj.Location, expected)
+							}
+							// If publisher dropped some objects, update expected locs and expected count
+							expectedLocs = enc.ExpectedLocationsAfter(expected)
+							next, stop = iter.Pull(expectedLocs)
+							defer stop()
+
+							expectedCount = enc.ExpectedObjectCountAfter(obj.Location)
+							currentCount = 0
+							dropsCount++
+							continue Loop
+						}
+
+						currentCount++
+
+					case <-time.After(5 * time.Second):
+						t.Fatal("Timed out reading from the subscriber channel")
+					case <-sess.Conn.Context().Done():
+						t.Fatal("Session connection context was closed unexpectedly while waiting for objects")
+					}
+				}
+
+				if currentCount != expectedCount {
+					t.Errorf("Expected to receive %d objects after location %v, but received %d", expectedCount, firstObjectLoc, currentCount)
+				}
+
+				t.Logf("Successfully received %d objects after location %v with %d drops, track ended", currentCount, firstObjectLoc, dropsCount)
 			})
 		})
 
-		// // Test Case 2: TerminateIfTerminationError
+		// Test Case 2: TerminateIfTerminationError
 
-		// t.Run("TerminateIfTerminationError_Wrapped_Error_Terminates", func(t *testing.T) {
-		// 	terminationError := model.MOQT_SESSION_TERMINATION_ERROR{
-		// 		ReasonPhrase: "Test termination",
-		// 		ErrorCode:    model.MOQT_SESSION_TERMINATION_ERROR_CODE_PROTOCOL_VIOLATION,
-		// 	}
-		// 	sess.TerminateIfTerminationError(fmt.Errorf("Wrapped error with internal session termination error: %w", &terminationError))
+		t.Run("TerminateIfTerminationError_Wrapped_Error_Terminates", func(t *testing.T) {
+			terminationError := model.MOQT_SESSION_TERMINATION_ERROR{
+				ReasonPhrase: "Test termination",
+				ErrorCode:    model.MOQT_SESSION_TERMINATION_ERROR_CODE_PROTOCOL_VIOLATION,
+			}
+			sess.TerminateIfTerminationError(fmt.Errorf("Wrapped error with internal session termination error: %w", &terminationError))
 
-		// 	// Assertion 1
-		// 	// sess.Conn.Context() should be closed
-		// 	select {
-		// 	case <-sess.Conn.Context().Done():
-		// 		// Success: Connection context is closed
-		// 	case <-time.After(2 * time.Second):
-		// 		t.Error("Session connection context was not closed after termination error")
-		// 	}
-		// })
+			// Assertion 1
+			// sess.Conn.Context() should be closed
+			select {
+			case <-sess.Conn.Context().Done():
+				// Success: Connection context is closed
+			case <-time.After(2 * time.Second):
+				t.Error("Session connection context was not closed after termination error")
+			}
+		})
 
-		// // Test Case 3: Client is unable to write on terminated connection's control stream
-		// t.Run("Client_ReadControlMessage_Terminated_Session_Fails", func(t *testing.T) {
-		// 	// Client tries to send control message
-		// 	cMsg := control.SubscribeMessage{
-		// 		RequestId: 1,
-		// 		FullTrackName: &model.MoqtFullTrackName{
-		// 			Namespace: [][]byte{[]byte("test")},
-		// 			Name:      []byte("track"),
-		// 		},
-		// 		Parameters: []model.MoqtKeyValuePair{},
-		// 	}
-		// 	err := sess.Cmf.WriteControlMessage(&cMsg)
-		// 	fmt.Printf("Sucessfully received error after trying to write to terminated control stream %v\n", err)
-		// 	if err == nil {
-		// 		t.Error("Expected error when writing to a terminated session's control stream, but got nil")
-		// 	}
-		// })
+		// Test Case 3: Client is unable to write on terminated connection's control stream
+		t.Run("Client_ReadControlMessage_Terminated_Session_Fails", func(t *testing.T) {
+			// Client tries to send control message
+			cMsg := control.SubscribeMessage{
+				RequestId: 1,
+				FullTrackName: &model.MoqtFullTrackName{
+					Namespace: [][]byte{[]byte("test")},
+					Name:      []byte("track"),
+				},
+				Parameters: []model.MoqtKeyValuePair{},
+			}
+			err := sess.Cmf.WriteControlMessage(&cMsg)
+			fmt.Printf("Sucessfully received error after trying to write to terminated control stream %v\n", err)
+			if err == nil {
+				t.Error("Expected error when writing to a terminated session's control stream, but got nil")
+			}
+		})
 	})
 
 	t.Cleanup(func() {

@@ -1,3 +1,4 @@
 local_certs/
 *.txt
 !draft-ietf-moq-transport-15.txt
+.vscode/

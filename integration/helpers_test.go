@@ -101,6 +101,7 @@ func setupSession(t *testing.T, srv *peer.Server) *session.Session {
 
 	// Register SUBSCRIBE_OK message handler
 	sess.RegisterHandler(control.SUBSCRIBE_OK, session.MessageHandler(client.HandleSubscribeOk))
+	sess.RegisterHandler(control.PUBLISH_DONE, session.MessageHandler(client.HandlePublishDone))
 	go sess.RunControlLoop()
 	go sess.Subscriber.ListenAndRedispatch()
 
