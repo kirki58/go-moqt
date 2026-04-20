@@ -133,6 +133,11 @@ func Test_Integration(t *testing.T) {
 							continue Loop
 						}
 
+						// mock encoder only produces payload objects
+						if !(len(obj.Payload) > 0){
+							t.Errorf("Received object with location %v has empty payload, but expected a payload since the mock encoder only produces payload objects", obj.Location)
+						}  
+
 						currentCount++
 
 					case <-time.After(5 * time.Second):

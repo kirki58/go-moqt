@@ -11,33 +11,43 @@ import (
 	"github.com/pion/webrtc/v3/pkg/media/h264reader"
 )
 
-type H264Encoder struct{
+var longStartCode []byte = []byte{0x00, 0x00, 0x00, 0x01} // before every SPS/PPS and IDR frames
+var shortStartCode []byte = []byte{0x00, 0x00, 0x01} // before every P frame
+
+type H264Encoder struct {
 	dispatcher *session.Dispatcher
 	ftn        *model.MoqtFullTrackName
 }
 
-func (en *H264Encoder) Encode(source_path string){
+func NewH264Encoder(disp *session.Dispatcher, ftn *model.MoqtFullTrackName) *H264Encoder {
+	return &H264Encoder{
+		dispatcher: disp,
+		ftn:        ftn,
+	}
+}
+
+func (en *H264Encoder) Encode() {
 	// The FFmpeg command arguments
 	args := []string{
-		"-re",                             // Read input in real-time
+		"-re", // Read input in real-time
 		"-f", "lavfi", "-i", "testsrc=duration=120:size=854x480:rate=30",
 		"-c:v", "libx264",
 		"-preset", "veryfast",
 		"-pix_fmt", "yuv420p",
-		"-g", "30",                        // GOP size (1 IDR per second)
-		"-keyint_min", "30",               // Force fixed GOP
-		"-sc_threshold", "0",              // No accidental I-frames
+		"-g", "30", // GOP size (1 IDR per second)
+		"-keyint_min", "30", // Force fixed GOP
+		"-sc_threshold", "0", // No accidental I-frames
 		"-x264-params", "repeat-headers=1", // SPS/PPS before every IDR
-		"-bsf:v", "h264_mp4toannexb",      // Ensure Annex B start codes
-		"-f", "h264",                      // Raw H.264 elementary stream
-		"-",                               // Output to Stdout
+		"-bsf:v", "h264_mp4toannexb", // Ensure Annex B start codes
+		"-f", "h264", // Raw H.264 elementary stream
+		"-", // Output to Stdout
 	}
 
 	cmd := exec.Command("ffmpeg", args...)
-	
+
 	// Connect to the Stdout of the process
 	stdout, err := cmd.StdoutPipe()
-	if err != nil{
+	if err != nil {
 		log.Printf("[Encoder ERROR] Could not create stdout pipe from ffmpeg process / %v\n", err)
 		return
 	}
@@ -61,11 +71,12 @@ func (en *H264Encoder) Encode(source_path string){
 
 	latestGroup := uint64(0)
 	latestObj := uint64(0)
+	var payload []byte
 
 	for {
 		nal, err := h264R.NextNAL()
-		if err != nil{
-			if err == io.EOF{
+		if err != nil {
+			if err == io.EOF {
 				// End of track
 				break
 			}
@@ -73,7 +84,7 @@ func (en *H264Encoder) Encode(source_path string){
 			continue
 		}
 
-		if len(nal.Data) == 0{
+		if len(nal.Data) == 0 {
 			continue
 		}
 
@@ -81,19 +92,18 @@ func (en *H264Encoder) Encode(source_path string){
 		headerByte := nal.Data[0]
 		// Lower 5 bits of the header indicate it's type (AND with 00011111 to get the lower 5 bits)
 		nalUnitType := headerByte & 0x1F
-
-		var payload []byte
 		switch nalUnitType {
 		case 1:
 			// Classic P frame
+			pFramePayload := append(shortStartCode, nal.Data...)
 			obj := &model.MoqtObject{
-				Location: model.MoqtLocation{GroupId: latestGroup, ObjectId: latestObj},
-				SubgroupID: 0,
-				FullTrackName: *en.ftn,
-				PublisherPriority: 128,
+				Location:                   model.MoqtLocation{GroupId: latestGroup, ObjectId: latestObj},
+				SubgroupID:                 0,
+				FullTrackName:              *en.ftn,
+				PublisherPriority:          128,
 				ObjectForwardingPreference: model.Subgroup,
-				ObjectStatus: model.Normal,
-				Payload: nal.Data,
+				ObjectStatus:               model.Normal,
+				Payload:                    pFramePayload,
 			}
 			en.dispatcher.Dispatch(obj)
 			latestObj++
@@ -101,39 +111,41 @@ func (en *H264Encoder) Encode(source_path string){
 		case 7:
 			// SPS Unit, encoder configuration metadata
 			// Acts as group start
-			// MUST read 1 PPS and 1 IDR units in that order to get a full group 
+			// MUST read 1 PPS and 1 IDR units in that order to get a full group
 			// It is guaranteed to receive SPS, PPS, and IDR units in that order per the ffmpeg encoder
+			payload = append(payload, longStartCode...)
 			payload = append(payload, nal.Data...)
-
-			latestGroup++
-			latestObj = 0
 
 		case 8:
 			// PPS Unit, picture metadata
 			// Received after SPS
 			// It should be inside the group start object
+			payload = append(payload, longStartCode...)
 			payload = append(payload, nal.Data...)
-		
+
 		case 5:
 			// IDR Unit, Contains the keyframe
 			// Received after PPS
 			// It should be the last unit inside the group start object
+			payload = append(payload, longStartCode...)
 			payload = append(payload, nal.Data...)
 			obj := &model.MoqtObject{
-				Location: model.MoqtLocation{GroupId: latestGroup, ObjectId: latestObj},
-				SubgroupID: 0,
-				FullTrackName: *en.ftn,
-				PublisherPriority: 128,
+				Location:                   model.MoqtLocation{GroupId: latestGroup, ObjectId: latestObj},
+				SubgroupID:                 0,
+				FullTrackName:              *en.ftn,
+				PublisherPriority:          128,
 				ObjectForwardingPreference: model.Subgroup,
-				ObjectStatus: model.Normal,
-				Payload: payload,
+				ObjectStatus:               model.Normal,
+				Payload:                    payload,
 			}
 			en.dispatcher.Dispatch(obj)
-			payload = payload[:0] // empty the paylaod buffer for the next group start (keep the capacity) 
+			payload = payload[:0] // empty the paylaod buffer for the next group start (keep the capacity)
+
+			latestGroup++
+			latestObj = 0
 		}
 	}
 	en.dispatcher.CloseAll()
-
 
 	cmd.Wait()
 }

@@ -156,13 +156,13 @@ func EncodeSubgroupObject(b *[]byte, sgo *model.SubgroupObject) {
 	if sgo.Extensions.Valid {
 		EncodeExtensions(b, sgo.Extensions.Val)
 	}
-	// For a status object payload length is encoded as 0 and then the status is encoded
-	if sgo.Status.Valid {
-		*b = quicvarint.Append(*b, uint64(0))              // Encode payload length (which is 0 for a status object)
-		*b = quicvarint.Append(*b, uint64(sgo.Status.Val)) // Encode status value
-	} else if sgo.Payload.Valid {
+
+	if sgo.Payload.Valid && len(sgo.Payload.Val) != 0 { // No need to encode status
 		*b = quicvarint.Append(*b, uint64(len(sgo.Payload.Val))) // Encode payload length
 		*b = append(*b, sgo.Payload.Val...)                      // Encode the buffer in
+	}else if sgo.Status.Valid{
+		*b = quicvarint.Append(*b, uint64(0))              // Encode payload length (which is 0 for a status object)
+		*b = quicvarint.Append(*b, uint64(sgo.Status.Val)) // Encode status value
 	}
 }
 

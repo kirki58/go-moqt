@@ -104,6 +104,13 @@ func main() {
 		log.Fatalf("Subscription with Request ID 0 is not found in subscriber's ActiveOutgoingSubscriptionIDs after waiting 50 ms to receive SUBSCRIBE_OK")
 	}
 
+	dataPipe, err := os.OpenFile("/tmp/h264_stream", os.O_WRONLY, 0600)
+
+	if err != nil {
+		log.Fatalf("Failed to open data pipe for writing: %v", err)
+		defer dataPipe.Close()
+	}
+	
 	Loop:
 		for {
 			select {
@@ -112,7 +119,8 @@ func main() {
 					fmt.Println("Subscription ended (EOT)")
 					break Loop
 				}
-				fmt.Printf("Received object with Location: GroupId %d, ObjectId %d\n", obj.Location.GroupId, obj.Location.ObjectId)
+				
+				dataPipe.Write(obj.Payload)
 			case <-time.After(5 * time.Second):
 				log.Fatal("Data plane timed out")
 			case <-sess.Conn.Context().Done():

@@ -81,7 +81,7 @@ func main() {
 	}
 
 	// Encoder starts to produce and dispatch (via the given dispatcher) objects
-	enc := h264.NewMockEncoder(disp, 1800, 60, &ftn)
+	enc := h264.NewH264Encoder(disp, &ftn)
 	go enc.Encode()
 
 	<-ctx.Done()

@@ -83,7 +83,7 @@ func (s *Subscriber) ActivateSubscription(reqId uint64, trackAlias uint64, large
 	sub.Alias = trackAlias
 	sub.Filter.StartLocation = largestObj
 	sub.Status = SubscriptionStatusEstablished
-	ch := make(chan *model.MoqtObject, 100)
+	ch := make(chan *model.MoqtObject, 1024)
 	sub.ObjectSendChannel = ch // buffered channel to avoid blocking the redispatch loop, buffer size is arbitrary for now
 	sub.ObjectReceiveChannel = ch
 
